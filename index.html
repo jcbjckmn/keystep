@@ -167,6 +167,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
     <section id="v-songs">
       <div class="row">
         <label class="inl">Song <select id="songSel"></select></label>
+        <label class="inl">Hands <select id="handsSel"><option value="both">Both hands</option><option value="R">Right hand only</option><option value="L">Left hand only</option></select></label>
         <div class="seg" role="radiogroup" aria-label="Play style">
           <label><input type="radio" name="gmode" value="wait" checked> Wait for me</label>
           <label><input type="radio" name="gmode" value="time"> Keep time</label>
@@ -370,7 +371,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
 
   /* ---------- saved progress (this browser only) ---------- */
   const KEY = 'keystep-v1';
-  const fresh = () => ({ read: { right: 0, total: 0, best: 0 }, songs: {}, custom: [] });
+  const fresh = () => ({ read: { right: 0, total: 0, best: 0 }, songs: {}, custom: [], hands: 'both' });
   let store = fresh();
   try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s) store = Object.assign(fresh(), s); } catch (e) {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); return true; } catch (e) { return false; } };
@@ -778,7 +779,11 @@ input[type=file] { max-width: 100%; font-size: 14px; }
   }
   function compile() {
     G.spb = 60 / G.bpm;
-    G.notes = G.song.notes.map((n) => ({ m: n.m, start: n.b * G.spb, dur: n.d * G.spb, h: n.h, st: 'pending' }));
+    /* practice one hand or both: keep only the notes for the chosen hand */
+    const want = store.hands === 'R' || store.hands === 'L' ? store.hands : 'both';
+    let src = want === 'both' ? G.song.notes : G.song.notes.filter((n) => n.h === want);
+    G.handsFellBack = !src.length; if (!src.length) src = G.song.notes;
+    G.notes = src.map((n) => ({ m: n.m, start: n.b * G.spb, dur: n.d * G.spb, h: n.h, st: 'pending' }));
     G.total = G.notes.length; G.groups = [];
     G.notes.forEach((n, i) => { const last = G.groups[G.groups.length - 1]; if (last && Math.abs(last.start - n.start) < 1e-6) last.idx.push(i); else G.groups.push({ start: n.start, idx: [i] }); });
     G.end = Math.max(...G.notes.map((n) => n.start + n.dur));
@@ -797,7 +802,9 @@ input[type=file] { max-width: 100%; font-size: 14px; }
     G.song = SONGS.find((s) => s.id === id) || SONGS[0]; G.bpm = G.song.bpm;
     const db = $('#delBtn'); db.hidden = !G.song.custom; db.dataset.arm = ''; db.textContent = 'Delete this song';
     $('#tempo').value = G.bpm; $('#tempoOut').textContent = G.bpm;
+    $('#handsSel').value = store.hands === 'R' || store.hands === 'L' ? store.hands : 'both';
     compile(); resetGame();
+    if (G.handsFellBack) gStatus('This song only has one hand written, so all of it is shown.');
     const ms = G.notes.map((n) => n.m), c = (Math.min(...ms) + Math.max(...ms)) / 2;
     const mid = isBlack(Math.round(c)) ? Math.round(c) - 1 : Math.round(c);
     scrollEl.scrollLeft = keyX(mid) - scrollEl.clientWidth / 2;
@@ -880,6 +887,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
     resetGame(); audio(); G.demo = true; G.t = -1; G.state = 'running'; updateBtns(); gStatus('Listening to the song. Watch where the tiles land.');
   });
   $('#songSel').addEventListener('change', (e) => loadSong(e.target.value));
+  $('#handsSel').addEventListener('change', (e) => { store.hands = e.target.value; save(); if (G.song) loadSong(G.song.id); });
   document.querySelectorAll('input[name=gmode]').forEach((r) => r.addEventListener('change', resetGame));
   $('#tempo').addEventListener('input', (e) => { G.bpm = +e.target.value; $('#tempoOut').textContent = G.bpm; compile(); resetGame(); });
 
