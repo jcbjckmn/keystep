@@ -1,0 +1,1361 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Keystep">
+<meta name="theme-color" content="#0f1115">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+</head><body><title>Keystep</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: header, microphone bar, tabs, one working panel, then the stage: falling tiles above a full 88-key keyboard drawn on one canvas. */
+:root {
+  --bg: #edf0f3; --surface: #ffffff; --fg: #151a21; --muted: #576170; --line: #d3d9e0;
+  --accent: #0e6b5c; --accent-ink: #ffffff;
+  --hint: #f2b230; --hint-ink: #2b1d00; --good: #1a8a4b; --bad: #c23a30;
+  --frame: #232a33; --key-w: #fbfcfd; --key-edge: #aab3be; --key-b: #181c22; --key-ink: #46505d;
+  --stage: #dfe5ec; --lane: #b9c3cf; --tile-r: #0e8f78; --tile-l: #5b5bd6;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1217; --surface: #171d25; --fg: #e7ebf0; --muted: #98a4b3; --line: #2a333e;
+    --accent: #3cc4a6; --accent-ink: #04231c;
+    --hint: #f2b230; --hint-ink: #2b1d00; --good: #4cc880; --bad: #ff7b6f;
+    --frame: #07090c; --key-w: #e8ecf0; --key-edge: #69737f; --key-b: #1d242d; --key-ink: #46505d;
+    --stage: #0f151c; --lane: #27313d; --tile-r: #3cc4a6; --tile-l: #8c8cff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1217; --surface: #171d25; --fg: #e7ebf0; --muted: #98a4b3; --line: #2a333e;
+  --accent: #3cc4a6; --accent-ink: #04231c;
+  --hint: #f2b230; --hint-ink: #2b1d00; --good: #4cc880; --bad: #ff7b6f;
+  --frame: #07090c; --key-w: #e8ecf0; --key-edge: #69737f; --key-b: #1d242d; --key-ink: #46505d;
+  --stage: #0f151c; --lane: #27313d; --tile-r: #3cc4a6; --tile-l: #8c8cff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body);
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.app { max-width: 1100px; margin: 0 auto; display: grid; gap: 14px; }
+h1, h2 { font-family: var(--font-display); margin: 0; line-height: 1.15; text-wrap: balance; }
+h1 { font-size: 26px; letter-spacing: -0.01em; }
+h2 { font-size: 18px; }
+p { margin: 0; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sub { color: var(--muted); font-size: 14px; }
+.top { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+
+.mic { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; }
+.microw { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.meter { width: 120px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.06s linear; }
+.micstat { flex: 1 1 240px; min-width: 0; font-size: 14px; color: var(--muted); }
+.micstat.on { color: var(--fg); }
+.micstat.err { color: var(--bad); }
+.mset summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+.mset .grid { display: flex; flex-wrap: wrap; gap: 10px 22px; padding-top: 10px; }
+
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; }
+.tab {
+  background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap;
+  padding: 10px 14px; font: 600 15px var(--font-display); color: var(--muted); cursor: pointer;
+}
+.tab:hover { color: var(--fg); }
+.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+.panel section { display: grid; gap: 14px; align-content: start; }
+.row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.btn { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; font-weight: 600; font-size: 14px; cursor: pointer; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.inl { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
+.inl input[type=range] { accent-color: var(--accent); width: 110px; }
+.inl output { min-width: 2.4ch; font-variant-numeric: tabular-nums; }
+select { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg label { padding: 6px 12px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--muted); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--accent); color: var(--accent-ink); }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+.feed { min-height: 1.5em; font-weight: 500; white-space: pre-line; }
+.feed.good { color: var(--good); }
+.feed.bad { color: var(--bad); }
+.score { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
+
+.readout { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
+.big { font: 700 52px/1 var(--font-display); min-width: 3.2ch; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.chords { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.chord { text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.chord:hover { border-color: var(--accent); }
+.chord b { display: block; font: 700 17px var(--font-display); }
+.chord span { font-size: 13px; color: var(--muted); }
+.rbody { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; }
+#staff { width: 100%; max-width: 440px; height: auto; color: var(--fg); flex: 1 1 280px; }
+.rstats { display: grid; grid-template-columns: repeat(3, auto); gap: 4px 20px; margin: 0; }
+.rstats dt { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.rstats dd { margin: 0; font: 700 24px var(--font-display); font-variant-numeric: tabular-nums; }
+.rhead { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.tile { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.tile b { display: block; font: 700 28px var(--font-display); font-variant-numeric: tabular-nums; }
+.tile span { font-size: 13px; color: var(--muted); }
+.plist { list-style: none; margin: 0; padding: 0; display: grid; }
+.plist li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.plist li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+
+.addp { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 12px; }
+.stack { display: grid; gap: 12px; }
+.fld { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+.fld input[type=text], .fld input[type=number], .fld textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--fg); width: 100%; }
+.fld input[type=number] { max-width: 140px; }
+.inl input[type=text] { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; color: var(--fg); width: 90px; }
+.fld textarea { min-height: 76px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical; }
+input[type=file] { max-width: 100%; font-size: 14px; }
+.scroll { overflow-x: auto; border-radius: 12px; background: var(--frame); }
+#cv { display: block; touch-action: pan-x; user-select: none; -webkit-user-select: none; }
+.help { color: var(--muted); font-size: 13px; }
+@media (hover: none) { .help.kbd { display: none; } }
+@media (max-width: 480px) { .panel { padding: 14px; } .big { font-size: 42px; } .tab { padding: 10px 10px; } }
+</style>
+
+<div class="app">
+  <header class="top"><h1>Keystep</h1><p class="sub">Free piano practice that listens to your piano</p></header>
+
+  <section class="mic" aria-label="Microphone">
+    <div class="microw">
+      <button class="btn primary" id="micBtn">Use my piano (microphone)</button>
+      <button class="btn" id="calBtn" type="button" title="Stay quiet for a moment so Keystep can learn the fan or airflow noise">Re-learn room noise</button>
+      <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+      <p class="micstat" id="micStat" aria-live="polite">Microphone is off. You can still play with the on-screen keys or your computer keyboard.</p>
+    </div>
+    <details class="mset">
+      <summary>Microphone settings</summary>
+      <div class="grid">
+        <label class="inl">Sensitivity <input type="range" id="sens" min="1" max="10" value="5"> <output id="sensOut">5</output></label>
+        <label class="chk"><input type="checkbox" id="single"> One note at a time (only the loudest note counts; for melodies, not chords)</label>
+        <label class="chk"><input type="checkbox" id="strictWrong"> Count extra heard notes as wrong in songs (off: only the song's notes count, so chords work)</label>
+        <label class="inl">Precision
+          <select id="fft"><option value="8192">Faster</option><option value="16384" selected>Balanced</option><option value="32768">Best for low notes</option></select>
+        </label>
+        <label class="inl">Timing delay <input type="range" id="delay" min="0" max="400" step="10" value="120"> <output id="delayOut">120</output> ms</label>
+      </div>
+    </details>
+  </section>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" data-mode="songs" aria-selected="true">Falling tiles</button>
+    <button class="tab" role="tab" data-mode="play" aria-selected="false">Play</button>
+    <button class="tab" role="tab" data-mode="read" aria-selected="false">Read notes</button>
+    <button class="tab" role="tab" data-mode="progress" aria-selected="false">Progress</button>
+  </nav>
+
+  <main class="panel">
+    <section id="v-songs">
+      <div class="row">
+        <label class="inl">Song <select id="songSel"></select></label>
+        <div class="seg" role="radiogroup" aria-label="Play style">
+          <label><input type="radio" name="gmode" value="wait" checked> Wait for me</label>
+          <label><input type="radio" name="gmode" value="time"> Keep time</label>
+        </div>
+        <label class="inl">Tempo <input type="range" id="tempo" min="30" max="200" value="80"> <output id="tempoOut">80</output></label>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="gPlay">Start</button>
+        <button class="btn" id="gRestart">Restart</button>
+        <button class="btn" id="gDemo">Hear it first</button>
+        <button class="btn" id="addBtn">Add a song</button>
+        <button class="btn" id="delBtn" hidden>Delete this song</button>
+        <span class="score" id="gScore"></span>
+      </div>
+      <p class="feed" id="gStatus" aria-live="polite"></p>
+      <div id="addPanel" class="addp" hidden>
+        <h2>Add a song</h2>
+        <div class="seg" role="radiogroup" aria-label="How to add a song">
+          <label><input type="radio" name="addkind" value="photo"> Sheet music photo</label>
+          <label><input type="radio" name="addkind" value="xml"> MusicXML</label>
+          <label><input type="radio" name="addkind" value="midi" checked> MIDI file</label>
+          <label><input type="radio" name="addkind" value="text"> Type the notes</label>
+        </div>
+        <label class="fld">Song name <input type="text" id="addTitle" maxlength="60" placeholder="My song"></label>
+        <div id="addMidi" class="stack">
+          <p class="sub">Free MIDI files (.mid) are easy to find for classical and folk pieces. Choose one and Keystep turns it into falling tiles. Notes from middle C up become right-hand tiles, the rest left-hand.</p>
+          <input type="file" id="midiFile" accept=".mid,.midi,audio/midi,audio/x-midi">
+          <label class="fld" id="midiOpts" hidden>Part to practice <select id="midiPart"></select></label>
+        </div>
+        <div id="addXml" class="stack" hidden>
+          <p class="sub">MusicXML (.musicxml, .xml or .mxl) is what MuseScore, Finale, Sibelius and OMR tools such as Audiveris export, so it keeps the notes exactly. Sheet music scanned with one of those tools comes through cleanly this way.</p>
+          <input type="file" id="xmlFile" accept=".musicxml,.xml,.mxl">
+          <label class="fld" id="xmlOpts" hidden>Part to practice <select id="xmlPart"></select></label>
+        </div>
+        <div id="addPhoto" class="stack" hidden>
+          <p class="sub" id="photoNA">Checking whether this page can read photos…</p>
+          <div id="photoUI" class="stack" hidden>
+            <p class="sub">Choose a PDF, or a clear straight-on photo or screenshot, of the music. Claude reads the notes into the Type the notes boxes so you can check and fix them before adding. Printed, simple pieces read best.</p>
+            <input type="file" id="photoFile" accept="image/*,application/pdf,.pdf" multiple>
+            <div id="driveWrap" hidden>
+              <div class="row"><button class="btn" id="driveBtn" type="button">Choose from Google Drive</button><span class="sub" id="driveNote"></span></div>
+              <div id="drivePick" hidden>
+                <div class="row"><input type="text" id="driveQ" placeholder="Search by name, or leave empty for recent files" aria-label="Search Google Drive" style="flex:1;min-width:0"><button class="btn" id="driveSearch" type="button">Search</button></div>
+                <div id="driveList" class="sub" role="list"></div>
+              </div>
+            </div>
+            <div class="row" id="pdfRow" hidden><label class="inl">Pages to read <input type="text" id="pdfPages" value="1" size="8" aria-label="Pages to read"></label><span class="sub" id="pdfInfo"></span></div>
+            <label class="chk"><input type="checkbox" id="photoCheck" checked> Double-check against the music (slower, fewer mistakes)</label>
+            <label class="chk"><input type="checkbox" id="photoAppend"> Add to the notes already in the boxes (for the next page of the same song)</label>
+            <div class="row">
+              <label class="inl">Read <select id="photoHands"><option value="rh">Right hand only (top staff)</option><option value="both">Both hands (top and bottom staff)</option></select></label>
+              <button class="btn primary" id="photoGo" type="button">Read the music</button>
+              <button class="btn" id="photoStop" type="button" hidden>Stop</button>
+            </div>
+          </div>
+        </div>
+        <div id="addText" class="stack" hidden>
+          <p class="sub">Write each note as a name and an optional length in beats. C4 is middle C, C4:2 lasts two beats, F#3 and Bb4 work, R:1 is a rest, and C4+E4+G4:2 is a chord. Bar lines (|) are ignored.</p>
+          <label class="fld">Right hand <textarea id="txtR" spellcheck="false" placeholder="E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4 | E4:1.5 D4:.5 D4:2"></textarea></label>
+          <label class="fld">Left hand (optional) <textarea id="txtL" spellcheck="false" placeholder="C3:4 G2:4 C3:4 G2:4"></textarea></label>
+          <label class="fld">Tempo in beats per minute <input type="number" id="txtBpm" min="30" max="200" value="80"></label>
+          <div class="row"><button class="btn" id="copyNotes" type="button">Copy these notes</button><span class="sub">Paste them into the Right hand box of another copy of Keystep to move the song there.</span></div>
+        </div>
+        <p class="feed" id="addMsg" aria-live="polite"></p>
+        <div class="row">
+          <button class="btn primary" id="addSave">Add song</button>
+          <button class="btn" id="addCancel">Close</button>
+          <span class="sub">Added songs stay in this browser.</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="v-play" hidden>
+      <div class="readout">
+        <div class="big" id="pName">&nbsp;</div>
+        <p class="sub" id="pSub">Play a key on your piano or click one below. Every note the app hears lights up.</p>
+      </div>
+      <div>
+        <h2>Try a chord</h2>
+        <p class="sub" style="margin-top:4px">Six chords that use only white keys. Tap one to see where the notes sit and hear them together.</p>
+      </div>
+      <div class="chords" id="chords"></div>
+    </section>
+
+    <section id="v-read" hidden>
+      <div class="rhead">
+        <h2>Read the note</h2>
+        <label class="inl">Range
+          <select id="level">
+            <option value="0">Five notes, C4 to G4</option>
+            <option value="1">One octave, C4 to B4</option>
+            <option value="2">Two octaves, C4 to B5</option>
+          </select>
+        </label>
+      </div>
+      <div class="rbody">
+        <svg id="staff" viewBox="0 40 260 130" role="img" aria-label="Treble clef staff with one note">
+          <g stroke="currentColor" stroke-width="1.2">
+            <line x1="8" x2="252" y1="90" y2="90"/><line x1="8" x2="252" y1="100" y2="100"/>
+            <line x1="8" x2="252" y1="110" y2="110"/><line x1="8" x2="252" y1="120" y2="120"/>
+            <line x1="8" x2="252" y1="130" y2="130"/>
+            <line x1="8" x2="8" y1="90" y2="130"/><line x1="252" x2="252" y1="90" y2="130"/>
+          </g>
+          <path fill="currentColor" transform="translate(16 110) scale(0.0621 -0.0621) translate(-120 -304.5)" d="M434 2Q464 -103 464 -170Q464 -223 427.0 -257.0Q390 -291 337 -291Q287 -291 250.0 -261.5Q213 -232 213 -190Q213 -160 233.5 -133.5Q254 -107 283.5 -107.0Q313 -107 331.5 -128.5Q350 -150 350 -178Q350 -240 280 -240Q298 -268 338 -268Q353 -268 368.5 -263.5Q384 -259 401.0 -248.0Q418 -237 428.5 -213.5Q439 -190 439 -157Q439 -136 411 -6Q389 -12 356 -12Q259 -12 189.5 60.0Q120 132 120 232Q120 267 131.5 303.0Q143 339 157.5 366.5Q172 394 200.5 428.5Q229 463 248.5 483.5Q268 504 303 539Q280 621 280 689Q280 779 313.0 839.5Q346 900 379 900Q389 900 401.5 887.0Q414 874 426.0 851.0Q438 828 446.5 790.5Q455 753 455 710Q455 551 342 447L368 329Q384 332 397 332Q458 332 500.0 282.5Q542 233 542 162Q542 44 434 2ZM426 746Q426 801 394 801Q358 801 333.0 748.0Q308 695 308 630Q308 588 321 557Q359 580 392.5 639.5Q426 699 426 746ZM498 128Q498 183 466.0 216.0Q434 249 383 249L428 23Q498 52 498 128ZM407 17 361 247Q334 241 311.5 214.0Q289 187 289 158Q289 143 295.0 128.5Q301 114 309.5 104.0Q318 94 327.0 86.0Q336 78 342.0 74.5Q348 71 348 71L340 66Q307 75 277.5 106.0Q248 137 248 184Q248 231 277.5 270.5Q307 310 343 323L325 430Q168 299 168 177Q168 104 223.0 55.0Q278 6 348 6Q365 6 407 17Z"/>
+          <g id="noteG"></g>
+        </svg>
+        <dl class="rstats">
+          <div><dt>Streak</dt><dd id="stStreak">0</dd></div>
+          <div><dt>Accuracy</dt><dd id="stAcc">&ndash;</dd></div>
+          <div><dt>Best streak</dt><dd id="stBest">0</dd></div>
+        </dl>
+      </div>
+      <p class="feed" id="rFeed" aria-live="polite">Which key is this note?</p>
+      <div class="row">
+        <button class="btn" id="rShow">Show me the key</button>
+        <button class="btn" id="rSkip">Skip</button>
+      </div>
+    </section>
+
+    <section id="v-progress" hidden></section>
+  </main>
+
+  <div class="scroll" id="scroll"><canvas id="cv" aria-label="Piano keyboard with falling tiles"></canvas></div>
+  <p class="help kbd">Computer keys also work: Z to M play C4 to B4, Q to U play C5 to B5. S D G H J and 2 3 5 6 7 are the black keys.</p>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const FLATS = { 'C#':'D♭', 'D#':'E♭', 'F#':'G♭', 'G#':'A♭', 'A#':'B♭' };
+  const LO = 21, HI = 108;
+  const isBlack = (m) => [1,3,6,8,10].includes(m % 12);
+  const pc = (m) => NAMES[m % 12];
+  const nameOf = (m) => pc(m) + (Math.floor(m / 12) - 1);
+  const parseNote = (s) => {
+    const k = /^([A-Ga-g])([#b]?)(\d)$/.exec(s); if (!k) return null;
+    const base = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[k[1].toUpperCase()] + (k[2] === '#' ? 1 : k[2] === 'b' ? -1 : 0);
+    const m = base + (parseInt(k[3], 10) + 1) * 12; return m >= LO && m <= HI ? m : null;
+  };
+
+  /*DET-START*/
+  function makeDetector(sr, fftSize) {
+    const nb = fftSize / 2, binHz = sr / fftSize;
+    const mag = new Float32Array(nb), a = new Float32Array(109), sup = new Float32Array(109);
+    const kLo = Math.max(2, Math.floor(80 / binHz)), kHi = Math.min(nb - 1, Math.floor(4000 / binHz));
+    const tmp = new Float32Array(Math.ceil((kHi - kLo + 1) / 2));
+    const f0 = (m) => 440 * Math.pow(2, (m - 69) / 12);
+    function peak(f, rel) {
+      const k0 = Math.max(1, Math.floor(f * (1 - rel) / binHz)), k1 = Math.min(nb - 1, Math.ceil(f * (1 + rel) / binHz));
+      let p = 0;
+      for (let k = k0; k <= k1; k++) if (mag[k] > p) p = mag[k];
+      return p;
+    }
+    const dbOf = (p, floor) => 20 * Math.log10(Math.max(p, 1e-12) / floor);
+    function analyze(db) {
+      for (let k = 0; k < nb; k++) mag[k] = Math.pow(10, db[k] / 20);
+      let n = 0;
+      for (let k = kLo; k <= kHi; k += 2) tmp[n++] = mag[k];
+      const sorted = tmp.slice(0, n).sort();
+      const floor = Math.max(sorted[n >> 1], 1e-9);
+      for (let m = 21; m <= 108; m++) {
+        const f = f0(m);
+        a[m] = dbOf(peak(f, 0.025), floor);
+        let s = -99;
+        [[2, 0.03], [3, 0.035], [4, 0.04]].forEach(([h, r]) => { if (f * h < sr / 2 - 100) s = Math.max(s, dbOf(peak(f * h, r), floor)); });
+        sup[m] = s;
+      }
+      let max = -99;
+      for (let m = 21; m <= 108; m++) if (a[m] > max) max = a[m];
+      return { a, sup, floor, max, fl: 20 * Math.log10(floor) };
+    }
+    return { analyze };
+  }
+  function isPresent(res, m, thr) {
+    const a = res.a[m], s = res.sup[m];
+    if (a < thr || a < res.max - 24) return false;
+    /* piano notes are narrow peaks; airflow and room noise are flat, so a peak must stand out from the pitches two steps either side */
+    if (m > 22 && m < 107 && a - Math.min(res.a[m - 2], res.a[m + 2]) < 6) return false;
+    /* low rumble (wind, fans, handling noise) lives down here, so ask for a clearer note */
+    if (m < 36 && a < thr + 6) return false;
+    /* must also rise clearly above the room noise measured when the microphone started */
+    if (typeof MIC !== 'undefined' && MIC.noise && a + res.fl < MIC.noise[m] + 12) return false;
+    if (m > 21 && a < res.a[m - 1]) return false;
+    if (m < 108 && a < res.a[m + 1]) return false;
+    return m >= 84 || s >= thr - 8;
+  }
+  function isExplained(res, present, c) {
+    /* a peak that lines up with a harmonic of a lower sounding note is that note's overtone, not a separate note.
+       Piano overtones run slightly sharp, so each offset is tried one semitone higher too, and an overtone can be
+       louder than the note itself on a small microphone. */
+    for (const s of [12, 19, 24, 28, 31, 34, 36, 38, 40, 43]) {
+      for (let d = 0; d <= 1; d++) {
+        const b = c - s - d;
+        if (b >= 21 && present.has(b) && res.a[c] <= res.a[b] + 10) return true;
+      }
+    }
+    return false;
+  }
+  /*DET-END*/
+
+  /* ---------- saved progress (this browser only) ---------- */
+  const KEY = 'keystep-v1';
+  const fresh = () => ({ read: { right: 0, total: 0, best: 0 }, songs: {}, custom: [] });
+  let store = fresh();
+  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s) store = Object.assign(fresh(), s); } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); return true; } catch (e) { return false; } };
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  /* ---------- app sound (used when no microphone is on) ---------- */
+  let actx = null, master = null;
+  function audio() {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+      actx = new AC(); const comp = actx.createDynamicsCompressor();
+      master = actx.createGain(); master.gain.value = 0.6; master.connect(comp); comp.connect(actx.destination);
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  const voices = new Map();
+  function startNote(m, id) {
+    const c = audio(); if (!c) return;
+    stopNote(id, true);
+    const t = c.currentTime, f = 440 * Math.pow(2, (m - 69) / 12), g = c.createGain(), peak = 0.4;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(peak * 0.35, t + 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
+    g.connect(master);
+    const oscs = [['sine',1,1],['triangle',2,0.28],['sine',3,0.1],['sine',4,0.05]].map(([type, mult, amp]) => {
+      const o = c.createOscillator(); o.type = type; o.frequency.value = f * mult;
+      const pg = c.createGain(); pg.gain.value = amp; o.connect(pg); pg.connect(g); o.start(t); return o;
+    });
+    voices.set(id, { g, oscs });
+  }
+  function stopNote(id, quick) {
+    const v = voices.get(id); if (!v || !actx) return;
+    voices.delete(id);
+    const t = actx.currentTime, rel = quick ? 0.03 : 0.25;
+    try { if (v.g.gain.cancelAndHoldAtTime) v.g.gain.cancelAndHoldAtTime(t); else v.g.gain.cancelScheduledValues(t); } catch (e) {}
+    v.g.gain.setTargetAtTime(0.0001, t, rel / 4);
+    v.oscs.forEach((o) => { try { o.stop(t + rel + 0.1); } catch (e) {} });
+  }
+
+  /* ---------- shared state ---------- */
+  let mode = 'songs';
+  const flashes = new Map(), hints = new Set(), down = new Map();
+  let heard = new Set();
+  const flash = (m, cls, ms = 350) => flashes.set(m, { cls, until: performance.now() + ms });
+
+  /* ---------- stage: full keyboard + falling tiles on one canvas ---------- */
+  const scrollEl = $('#scroll'), cv = $('#cv'), g = cv.getContext('2d');
+  const whites = [], wIdx = {};
+  for (let m = LO; m <= HI; m++) if (!isBlack(m)) { wIdx[m] = whites.length; whites.push(m); }
+  let ww = 14, kbH = 110, tH = 0, W = 0, H = 0;
+  const C = {};
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    ['stage','lane','tile-r','tile-l','key-w','key-edge','key-b','frame','accent','hint','good','bad','key-ink','fg','hint-ink'].forEach((n) => { C[n] = cs.getPropertyValue('--' + n).trim(); });
+  }
+  function layout() {
+    const boxW = Math.max(280, scrollEl.clientWidth);
+    ww = Math.max(boxW / whites.length, 13);
+    W = Math.round(ww * whites.length);
+    kbH = Math.round(Math.min(150, Math.max(96, ww * 7.2)));
+    tH = mode === 'songs' ? Math.round(Math.min(440, Math.max(240, window.innerHeight * 0.48))) : 0;
+    H = tH + kbH;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  const keyX = (m) => isBlack(m) ? (wIdx[m - 1] + 1) * ww - ww * 0.3 : wIdx[m] * ww;
+  const keyW = (m) => isBlack(m) ? ww * 0.6 : ww;
+  function keyAt(x, y) {
+    const ly = y - tH; if (ly < 0 || ly > kbH) return null;
+    if (ly < kbH * 0.62) for (let m = LO; m <= HI; m++) if (isBlack(m) && x >= keyX(m) && x <= keyX(m) + keyW(m)) return m;
+    const i = Math.floor(x / ww); return whites[i] != null ? whites[i] : null;
+  }
+  function rrb(x, y, w, h, r) { g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y); g.lineTo(x + w, y + h - r); g.arcTo(x + w, y + h, x + w - r, y + h, r); g.lineTo(x + r, y + h); g.arcTo(x, y + h, x, y + h - r, r); g.closePath(); }
+  function rr(x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+
+  function draw() {
+    g.clearRect(0, 0, W, H);
+    const now = performance.now(), downSet = new Set(down.values());
+    const hintSet = mode === 'songs' ? gameHints() : hints;
+    const activeSet = new Set();
+    if (tH > 0) {
+      g.fillStyle = C.stage; g.fillRect(0, 0, W, tH);
+      g.globalAlpha = 0.3; g.fillStyle = C.lane;
+      for (let m = LO; m <= HI; m++) if (isBlack(m)) g.fillRect(keyX(m), 0, keyW(m), tH);
+      g.globalAlpha = 1; g.fillStyle = C.lane;
+      for (let m = LO; m <= HI; m++) if (m % 12 === 0) g.fillRect(wIdx[m] * ww, 0, 1, tH);
+      if (G.song) {
+        const pps = tH / 3.2;
+        g.font = '600 11px Inter, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        G.notes.forEach((n) => {
+          const yb = tH - (n.start - G.t) * pps, yt = yb - Math.max(n.dur * pps, 12);
+          if (n.st === 'hit' && G.t >= n.start && G.t <= n.start + n.dur) activeSet.add(n.m);
+          if (yb <= 0 || yt >= tH) return;
+          const top = Math.max(0, yt) + 1.5, bot = Math.min(tH, yb);
+          if (bot - top < 2) return;
+          const x = keyX(n.m) + (isBlack(n.m) ? 0.5 : 1.5), w = keyW(n.m) - (isBlack(n.m) ? 1 : 3);
+          g.globalAlpha = n.st === 'miss' ? 0.4 : 1;
+          g.fillStyle = n.st === 'hit' ? C.good : n.st === 'miss' ? C.bad : (n.h === 'L' ? C['tile-l'] : C['tile-r']);
+          rr(x, top, w, bot - top, 4); g.fill(); g.globalAlpha = 1;
+          if (w >= 13 && bot - top >= 14) { g.fillStyle = '#0b1218'; g.fillText(pc(n.m), x + w / 2, bot - 8); }
+        });
+        if (G.mode === 'time' && !G.demo && G.state === 'running' && G.t < 0) {
+          g.fillStyle = C.fg; g.font = '700 64px "Space Grotesk", system-ui, sans-serif'; g.textBaseline = 'middle';
+          g.fillText(String(Math.ceil(-G.t)), W / 2 + (scrollEl.scrollLeft - 0) * 0, tH / 2);
+        }
+      }
+      g.fillStyle = C.frame; g.fillRect(0, tH - 3, W, 3);
+    }
+    const fill = (m, black) => {
+      const f = flashes.get(m);
+      if (f && f.until > now) return f.cls === 'ok' ? C.good : C.bad;
+      if (downSet.has(m) || heard.has(m) || activeSet.has(m)) return C.accent;
+      if (hintSet.has(m)) return C.hint;
+      return black ? C['key-b'] : C['key-w'];
+    };
+    g.font = '600 9px Inter, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    whites.forEach((m) => {
+      const x = wIdx[m] * ww;
+      g.fillStyle = fill(m, false); rrb(x + 0.5, tH, ww - 1, kbH - 1, 3); g.fill();
+      g.strokeStyle = C['key-edge']; g.lineWidth = 1; g.stroke();
+      if (m % 12 === 0) { g.fillStyle = C['key-ink']; g.fillText(nameOf(m), x + ww / 2, tH + kbH - 7); }
+    });
+    for (let m = LO; m <= HI; m++) if (isBlack(m)) {
+      g.fillStyle = fill(m, true); rrb(keyX(m), tH, keyW(m), kbH * 0.62, 2); g.fill();
+      g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke();
+    }
+  }
+
+  /* ---------- key presses: pointer, computer keyboard ---------- */
+  function press(m, src) {
+    if (down.has(src)) return;
+    down.set(src, m);
+    if (!MIC.on) startNote(m, src);
+    onNote(m);
+  }
+  function release(src) { const m = down.get(src); if (m == null) return; down.delete(src); stopNote(src); }
+  cv.addEventListener('pointerdown', (e) => {
+    const r = cv.getBoundingClientRect(), m = keyAt(e.clientX - r.left, e.clientY - r.top);
+    if (m == null) return; e.preventDefault(); press(m, 'p' + e.pointerId);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => cv.addEventListener(ev, (e) => release('p' + e.pointerId)));
+  const KMAP = { z:60, s:61, x:62, d:63, c:64, v:65, g:66, b:67, h:68, n:69, j:70, m:71, q:72, '2':73, w:74, '3':75, e:76, r:77, '5':78, t:79, '6':80, y:81, '7':82, u:83 };
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest && e.target.closest('select, input[type=range]')) return;
+    const m = KMAP[(e.key || '').toLowerCase()]; if (m == null) return;
+    e.preventDefault(); press(m, 'k' + e.code);
+  });
+  document.addEventListener('keyup', (e) => release('k' + e.code));
+  window.addEventListener('blur', () => [...down.keys()].forEach(release));
+
+  /* ---------- microphone ---------- */
+  const MIC = { on: false, stream: null, src: null, an: null, det: null, db: null, td: null, hist: null, last: null, hp: 0, startedAt: 0, muteUntil: 0, thr: 15, fft: 16384, lastText: '' };
+  const HN = 10, RISE = 4, COOL = 140;
+  const micStat = (t, cls) => { const el = $('#micStat'); if (el.textContent !== t) el.textContent = t; el.className = 'micstat' + (cls ? ' ' + cls : ''); };
+  function buildDetector() {
+    MIC.det = makeDetector(actx.sampleRate, MIC.fft);
+    MIC.db = new Float32Array(MIC.fft / 2);
+    MIC.hist = Array.from({ length: 109 }, () => new Float32Array(HN).fill(-99));
+    MIC.last = new Float64Array(109); MIC.hp = 0; MIC.startedAt = performance.now();
+    MIC.tc = new Uint8Array(109); MIC.last2 = new Float64Array(109); MIC.cnt = new Uint8Array(109); MIC.noise = new Float32Array(109).fill(-200); MIC.calUntil = MIC.startedAt + 1500;
+  }
+  async function startMic() {
+    const embedded = window.self !== window.top;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      micStat(embedded ? 'This page is running inside claude.ai, which blocks microphones. Open the installed Keystep app instead.' : (window.isSecureContext === false ? 'This page was opened from a file or an http link, and the iPad only allows the microphone on https. Open your netlify.app link in Safari instead (the address must start with https).' : 'This browser can\'t reach a microphone from this page. Try Safari, Chrome, Edge or Firefox.'), 'err'); return;
+    }
+    try {
+      try { MIC.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
+      catch (e0) { if (e0 && (e0.name === 'NotAllowedError' || e0.name === 'SecurityError')) throw e0; MIC.stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    } catch (e) {
+      const n = (e && e.name) || 'Error';
+      let m;
+      if (embedded) m = 'The microphone is blocked inside claude.ai. Open the installed Keystep app instead, then press the button again.';
+      else if (n === 'NotAllowedError' || n === 'SecurityError') m = 'The iPad said no to the microphone (' + n + '). Fix: Settings > Apps > Safari > Microphone (older iPadOS: Settings > Safari > Microphone) and choose Ask or Allow. Then close Keystep completely and open it again. If it still fails, delete the Keystep icon, open the link in Safari, allow the microphone there, and add it to the Home Screen again.';
+      else if (n === 'NotFoundError' || n === 'OverconstrainedError') m = 'No microphone was found (' + n + '). Check nothing else is using it, such as a call or recording, then try again.';
+      else if (n === 'NotReadableError' || n === 'AbortError') m = 'The microphone is busy or could not start (' + n + '). Close other apps that use audio, then try again.';
+      else m = 'The microphone failed to start (' + n + (e && e.message ? ': ' + e.message : '') + ').';
+      micStat(m, 'err'); return;
+    }
+    audio();
+    MIC.src = actx.createMediaStreamSource(MIC.stream);
+    MIC.an = actx.createAnalyser(); MIC.an.fftSize = MIC.fft; MIC.an.smoothingTimeConstant = 0.25;
+    MIC.td = new Float32Array(MIC.an.fftSize);
+    MIC.src.connect(MIC.an);
+    buildDetector(); MIC.on = true;
+    $('#micBtn').textContent = 'Turn microphone off';
+    micStat('Listening. Play a note on your piano and watch the keys light up.', 'on');
+  }
+  function stopMic() {
+    MIC.on = false; heard = new Set();
+    try { MIC.src.disconnect(); } catch (e) {}
+    if (MIC.stream) MIC.stream.getTracks().forEach((t) => t.stop());
+    MIC.stream = null; $('#meter').style.width = '0';
+    $('#micBtn').textContent = 'Use my piano (microphone)';
+    micStat('Microphone is off. You can still play with the on-screen keys or your computer keyboard.');
+  }
+  $('#micBtn').addEventListener('click', () => { if (MIC.on) stopMic(); else startMic(); });
+  $('#calBtn').addEventListener('click', () => { if (MIC.on) { MIC.noise.fill(-200); MIC.calUntil = performance.now() + 1500; } else micStat('Turn the microphone on first, then press this while the room is quiet.', 'err'); });
+  const syncSettings = () => {
+    MIC.thr = 30 - 2.5 * (+$('#sens').value); $('#sensOut').textContent = $('#sens').value;
+    G.delay = +$('#delay').value / 1000; $('#delayOut').textContent = $('#delay').value;
+  };
+  $('#sens').addEventListener('input', syncSettings); $('#delay').addEventListener('input', syncSettings);
+  $('#fft').addEventListener('change', (e) => { MIC.fft = +e.target.value; if (MIC.on) { MIC.an.fftSize = MIC.fft; MIC.td = new Float32Array(MIC.fft); buildDetector(); } });
+
+  function micTick() {
+    if (!MIC.on) return;
+    const now = performance.now();
+    MIC.an.getFloatTimeDomainData(MIC.td);
+    let s = 0; const n = Math.min(2048, MIC.td.length);
+    for (let i = MIC.td.length - n; i < MIC.td.length; i++) s += MIC.td[i] * MIC.td[i];
+    const level = 20 * Math.log10(Math.sqrt(s / n) + 1e-9);
+    $('#meter').style.width = Math.max(0, Math.min(100, (level + 60) * 2)) + '%';
+    MIC.an.getFloatFrequencyData(MIC.db);
+    const res = MIC.det.analyze(MIC.db), thr = MIC.thr, present = new Set(), strikes = [], strikes2 = [];
+    if (now < MIC.calUntil) {
+      for (let m = 21; m <= 108; m++) { const v = res.a[m] + res.fl; if (v > MIC.noise[m]) MIC.noise[m] = v; }
+      heard = new Set(); micStat('Learning the room noise. Stay quiet for a moment…', 'on'); return;
+    }
+    for (let m = LO; m <= HI; m++) {
+      const a = res.a[m], raw = isPresent(res, m, thr), h = MIC.hist[m];
+      /* a note must be there for 3 frames in a row; clicks, taps and gusts of air are too short */
+      MIC.cnt[m] = raw ? MIC.cnt[m] + 1 : 0;
+      const pres = MIC.cnt[m] >= 3;
+      let lo = 1e9; for (let i = 0; i < HN; i++) if (h[i] < lo) lo = h[i];
+      h[MIC.hp] = a;
+      if (pres) present.add(m);
+      if (pres && a - lo >= RISE && now - MIC.last[m] > COOL) { strikes.push(m); MIC.last[m] = now; }
+      /* looser test used only for notes the song is waiting for: we know what to listen for, so it can be less strict */
+      MIC.tc[m] = isPresent(res, m, thr - 4) ? MIC.tc[m] + 1 : 0;
+      if (MIC.tc[m] >= 3 && a - lo >= RISE - 1 && now - MIC.last2[m] > COOL) { strikes2.push(m); MIC.last2[m] = now; }
+    }
+    MIC.hp = (MIC.hp + 1) % HN;
+    const muted = now < MIC.muteUntil || now - MIC.startedAt < 600;
+    if (mode === 'songs') {
+      /* Songs: only the notes the song is waiting for are checked. Anything else the microphone hears is ignored. */
+      const tg = new Set();
+      if (G.state === 'running' && !G.demo) {
+        if (G.mode === 'wait') { const gr = curGroup(); if (gr) gr.idx.forEach((j) => { if (G.notes[j].st === 'pending') tg.add(G.notes[j].m); }); }
+        else { const tt = G.t - G.delay; G.notes.forEach((n) => { if (n.st === 'pending' && Math.abs(n.start - tt) <= 0.45) tg.add(n.m); }); }
+      }
+      heard = new Set();
+      if (!muted && tg.size) {
+        const others = new Set([...present].filter((x) => !tg.has(x)));
+        strikes2.filter((m) => tg.has(m) && !isExplained(res, others, m)).forEach((m) => gameStrike(m, true));
+      }
+      if (now - (MIC.textAt || 0) > 120) { MIC.textAt = now; micStat(muted ? 'Listening…' : (tg.size ? 'Listening for ' + [...tg].sort((x, y) => x - y).map(nameOf).join(' + ') : 'Listening. Press Start, then play.'), 'on'); }
+      return;
+    }
+    let keep = [...present].filter((m) => !isExplained(res, present, m));
+    let loud = -99, top = -1;
+    keep.forEach((m) => { if (res.a[m] > loud) { loud = res.a[m]; top = m; } });
+    /* one note at a time: only the loudest unexplained note counts */
+    if ($('#single').checked && keep.length > 1) keep = [top];
+    const keepSet = new Set(keep);
+    heard = muted ? new Set() : keepSet;
+    if (!muted) {
+      const real = strikes.filter((m) => keepSet.has(m));
+      if (real.length) handleStrikes(real, res);
+    }
+    const txt = heard.size ? 'Heard: ' + [...heard].slice(0, 8).map((m) => nameOf(m) + ' ' + Math.round(res.a[m]) + 'dB').join('  ') : 'Listening. Play a note on your piano.';
+    if (now - (MIC.textAt || 0) > 120) { MIC.textAt = now; micStat(txt, 'on'); }
+  }
+  function handleStrikes(real, res) {
+    if (mode === 'songs') real.forEach((m) => gameStrike(m, true));
+    else {
+      const best = real.reduce((b, m) => (res.a[m] > res.a[b] ? m : b), real[0]);
+      if (mode === 'read') readAnswer(best); else if (mode === 'play') playReadout(best);
+    }
+  }
+  function onNote(m) {
+    if (mode === 'songs') gameStrike(m, false);
+    else if (mode === 'read') readAnswer(m);
+    else if (mode === 'play') playReadout(m);
+  }
+
+  /* ---------- modes ---------- */
+  function setMode(next) {
+    mode = next;
+    document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.mode === next)));
+    ['songs', 'play', 'read', 'progress'].forEach((x) => { $('#v-' + x).hidden = x !== next; });
+    flashes.clear(); hints.clear(); clearChord();
+    if (G.state === 'running') pauseGame();
+    layout();
+    if (next === 'read') { if (R.cur == null) nextNote(); else if (R.hinted) hints.add(R.cur); }
+    if (next === 'songs') { renderSongSel(); updateBtns(); }
+    if (next === 'progress') renderProgress();
+  }
+  document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
+
+  /* ---------- Play ---------- */
+  function playReadout(m) {
+    $('#pName').textContent = nameOf(m);
+    $('#pSub').textContent = isBlack(m)
+      ? 'Black key. ' + nameOf(m) + ' is also written ' + FLATS[pc(m)] + String(Math.floor(m / 12) - 1) + '.'
+      : (m === 60 ? 'Middle C, the C nearest the middle of a full piano.' : 'A natural note, a white key.');
+  }
+  const CHORDS = [['C', [60, 64, 67]], ['Dm', [62, 65, 69]], ['Em', [64, 67, 71]], ['F', [65, 69, 72]], ['G', [67, 71, 74]], ['Am', [69, 72, 76]]];
+  let chordTimers = [];
+  function clearChord() { chordTimers.forEach(clearTimeout); chordTimers = []; hints.clear(); [...voices.keys()].filter((k) => String(k).startsWith('chord')).forEach((k) => stopNote(k)); }
+  $('#chords').innerHTML = CHORDS.map(([n, ms], i) => '<button class="chord" data-i="' + i + '"><b>' + n + '</b><span>' + ms.map(pc).join(' · ') + '</span></button>').join('');
+  $('#chords').addEventListener('click', (e) => {
+    const b = e.target.closest('.chord'); if (!b) return;
+    clearChord(); const [n, ms] = CHORDS[+b.dataset.i];
+    MIC.muteUntil = performance.now() + 2200;
+    ms.forEach((m) => { hints.add(m); startNote(m, 'chord' + m); });
+    $('#pName').textContent = n; $('#pSub').textContent = ms.map(nameOf).join(', ');
+    chordTimers.push(setTimeout(() => ms.forEach((m) => stopNote('chord' + m)), 1500));
+    chordTimers.push(setTimeout(() => hints.clear(), 1800));
+  });
+
+  /* ---------- Read notes ---------- */
+  const LEVELS = [{ lo: 60, hi: 67 }, { lo: 60, hi: 71 }, { lo: 60, hi: 83 }];
+  const R = { level: 0, cur: null, streak: 0, miss: 0, counted: false, locked: false, hinted: false };
+  const WI = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+  const posOf = (m) => Math.floor((m - 60) / 12) * 7 + WI[(m - 60) % 12] - 2;
+  function drawNote(m) {
+    const p = posOf(m), cx = 170, y = 130 - p * 5; let s = '';
+    const led = (yy) => '<line x1="' + (cx - 13) + '" x2="' + (cx + 13) + '" y1="' + yy + '" y2="' + yy + '" stroke="currentColor" stroke-width="1.2"/>';
+    for (let q = -2; q >= p; q -= 2) s += led(130 - q * 5);
+    for (let q = 10; q <= p; q += 2) s += led(130 - q * 5);
+    s += p < 4 ? '<line x1="' + (cx + 6.2) + '" x2="' + (cx + 6.2) + '" y1="' + (y - 1) + '" y2="' + (y - 32) + '" stroke="currentColor" stroke-width="1.4"/>'
+               : '<line x1="' + (cx - 6.2) + '" x2="' + (cx - 6.2) + '" y1="' + (y + 1) + '" y2="' + (y + 32) + '" stroke="currentColor" stroke-width="1.4"/>';
+    s += '<ellipse cx="' + cx + '" cy="' + y + '" rx="6.8" ry="5" fill="currentColor" transform="rotate(-20 ' + cx + ' ' + y + ')"/>';
+    $('#noteG').innerHTML = s;
+  }
+  const rFeed = (t, cls) => { const f = $('#rFeed'); f.textContent = t; f.className = 'feed' + (cls ? ' ' + cls : ''); };
+  function updateStats() {
+    const r = store.read;
+    $('#stStreak').textContent = R.streak; $('#stBest').textContent = r.best;
+    $('#stAcc').textContent = r.total ? Math.round(100 * r.right / r.total) + '%' : '–';
+  }
+  function nextNote() {
+    const L = LEVELS[R.level], pool = [];
+    for (let m = L.lo; m <= L.hi; m++) if (!isBlack(m)) pool.push(m);
+    let m; do { m = pool[Math.floor(Math.random() * pool.length)]; } while (m === R.cur && pool.length > 1);
+    R.cur = m; R.miss = 0; R.counted = false; R.locked = false; R.hinted = false;
+    hints.clear(); flashes.clear(); drawNote(m); rFeed('Which key is this note?'); updateStats();
+  }
+  function countMiss() { if (!R.counted) { R.counted = true; store.read.total++; R.streak = 0; save(); } }
+  function showHint() { countMiss(); R.hinted = true; hints.add(R.cur); rFeed('This is ' + nameOf(R.cur) + '. Play the lit key.'); updateStats(); }
+  function readAnswer(m) {
+    if (R.locked || R.cur == null) return;
+    if (m === R.cur) {
+      R.locked = true;
+      if (!R.counted) { store.read.total++; store.read.right++; R.streak++; if (R.streak > store.read.best) store.read.best = R.streak; save(); }
+      hints.clear(); flash(m, 'ok', 600); rFeed(nameOf(m) + ' is right.', 'good'); updateStats();
+      setTimeout(() => { if (mode === 'read' && R.locked) nextNote(); }, 900);
+    } else {
+      R.miss++; countMiss(); flash(m, 'bad');
+      if (R.miss >= 2) showHint(); else rFeed('That was ' + nameOf(m) + '. Check the line or space and try again.', 'bad');
+      updateStats();
+    }
+  }
+  $('#level').addEventListener('change', (e) => { R.level = +e.target.value; R.cur = null; nextNote(); });
+  $('#rShow').addEventListener('click', () => { if (!R.locked && R.cur != null) showHint(); });
+  $('#rSkip').addEventListener('click', () => { countMiss(); nextNote(); });
+
+  /* ---------- Falling tiles ---------- */
+  function parseSeq(str, hand) {
+    const out = []; let b = 0; if (!str) return out;
+    str.replace(/\|/g, ' ').trim().split(/\s+/).filter(Boolean).forEach((tok) => {
+      const [nn, dd] = tok.split(':'), d = dd ? parseFloat(dd) : 1;
+      if (!(d > 0 && d <= 32)) throw new Error('Couldn\'t read the length in "' + tok + '". Use a number of beats such as C4:2 or C4:.5.');
+      if (nn.toUpperCase() !== 'R') nn.split('+').forEach((x) => {
+        const m = parseNote(x);
+        if (m == null) throw new Error('Couldn\'t read "' + x + '". Use notes like C4, F#3 or Bb4 (A0 to C8), R for a rest, and + for chords.');
+        out.push({ m, b, d, h: hand });
+      });
+      b += d;
+    });
+    return out;
+  }
+  const mk = (id, title, by, bpm, rh, lh) => ({ id, title, by, bpm, notes: parseSeq(rh, 'R').concat(parseSeq(lh, 'L')).sort((x, y) => x.b - y.b || x.m - y.m) });
+  const BUILTIN = [
+    mk('scale', 'C major scale', 'Warm-up, right hand', 80, 'C4 D4 E4 F4 G4 A4 B4 C5:2 B4 A4 G4 F4 E4 D4 C4:2'),
+    mk('lscale', 'C major scale, left hand', 'Warm-up, low notes', 80, '', 'C3 D3 E3 F3 G3 A3 B3 C4:2 B3 A3 G3 F3 E3 D3 C3:2'),
+    mk('twinkle', 'Twinkle, Twinkle, Little Star', 'Traditional', 80, 'C4 C4 G4 G4 A4 A4 G4:2 | F4 F4 E4 E4 D4 D4 C4:2 | G4 G4 F4 F4 E4 E4 D4:2 | G4 G4 F4 F4 E4 E4 D4:2 | C4 C4 G4 G4 A4 A4 G4:2 | F4 F4 E4 E4 D4 D4 C4:2'),
+    mk('mary', 'Mary Had a Little Lamb', 'Traditional', 90, 'E4 D4 C4 D4 | E4 E4 E4:2 | D4 D4 D4:2 | E4 G4 G4:2 | E4 D4 C4 D4 | E4 E4 E4 E4 | D4 D4 E4 D4 | C4:4'),
+    mk('ode', 'Ode to Joy', 'Beethoven', 80, 'E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4 | E4:1.5 D4:.5 D4:2 | E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4 | D4:1.5 C4:.5 C4:2'),
+    mk('birthday', 'Happy Birthday', 'Traditional', 80, 'G4:.75 G4:.25 A4 G4 C5 B4:2 | G4:.75 G4:.25 A4 G4 D5 C5:2 | G4:.75 G4:.25 G5 E5 C5 B4 A4:2 | F5:.75 F5:.25 E5 C5 D5 C5:2'),
+    mk('elise', 'Für Elise, opening', 'Beethoven', 60, 'E5:.25 D#5:.25 E5:.25 D#5:.25 E5:.25 B4:.25 D5:.25 C5:.25 A4:.75 R:.25 C4:.25 E4:.25 A4:.25 B4:.75 R:.25 E4:.25 G#4:.25 B4:.25 C5:.75 R:.25 E4:.25 E5:.25 D#5:.25 E5:.25 D#5:.25 E5:.25 B4:.25 D5:.25 C5:.25 A4:.75 R:.25 C4:.25 E4:.25 A4:.25 B4:.75 R:.25 E4:.25 C5:.25 B4:.25 A4:1.5'),
+    mk('chords', 'Chords: C, F, G, C', 'Three notes at once', 56, 'C4+E4+G4:2 F4+A4+C5:2 G4+B4+D5:2 C4+E4+G4:4'),
+    mk('dancing', 'For the Dancing and the Dreaming', 'How to Train Your Dragon 2, John Powell (both hands, one steady tempo)', 100, 'C4:1 | C4+F4+A4:1.5 G4:0.5 A4:0.5 C5:1.5 | G3+C4+E4:1 D4:1 E4:1 C5:1 | C4+F4+A4:1.5 E4+G4:0.5 F4+A4:1 A4+C5:1 | A4+C5:1 C5+E5:0.5 F5:0.25 E5:0.25 B4+D5:6 | R:1 D5:1 G5:1 A5:1 | C5+F5+A5:1.5 G5:0.5 C5+F5+A5:0.5 C6:1.5 | C5+E5:1 B4+D5:0.5 E5:0.25 F5:0.25 | C5+E5:2 R:1 C5:1 | C5+F5+A5:1.5 G5:0.5 E5+G5:1 C5+E5:0.5 F5:0.25 E5:0.25 | B4+D5:1.5 E5:0.25 D5:0.25 | C5:0.5 G4:0.5 C5:0.5 D5:0.5 B4:0.5 G4:0.5 B4:0.5 C5:0.5 | A4:0.5 G4:0.5 G4:0.5 F4:0.5 F4:0.5 E4:0.5 D4:0.5 C4:0.5 | E4:1.5 D4:0.5 E4:1 G4:1 | D4:1 C4:1 E4:2 | E4:1.5 D4:0.5 E4:1 G4:1 | D4:2 C4:2 | E4:1.5 D4:0.5 E4:1 G4:0.5 D4:0.25 E4:0.25 | D4:1 C4:1 E4:1 R:1 | D4:1 C4:1 D4:1.5 E4:0.25 C4:0.125 D4:0.125 | C4:2 A3:2 | R:2 R:1 G3:1 | E4:1 D4:1 E4:1 G4:1 | D4:0.5 C4:1 E4:1 R:0.5 G3:1 | E4:1.5 D4:0.5 E4:1 G4:1 | D4:1 C4:1 R:1 G3:1 | E4:1 D4:1 E4:1 G4:0.5 D4:1.5 | C4:1 E4:1 R:0.5 G3:0.5 | D4:1.5 C4:0.5 D4:0.5 E4:1.5 | C4:2 A3:2 | R:2 R:1 C4:1 | C4+F4+A4:1 G4:1 A4:1 R:0.5 C5:0.5 | C4+E4:1 B3+D4:1 C4+E4:1 C4:0.5 G4:0.5 | A4:1.5 G4:0.5 A4:1 G4:1 | A4:2 E4:1 R:1 | R:2 R:1 C4:1 | A4:1 G4:1 A4:0.5 C5:1.5 | E4:1 D4:1 E4:1 C4:1 | A4:1 R:2 C4:1 | C4+A4:1.5 G4:0.5 C4+G4:1 E4:1 | B3+D4:1.5 G4:0.5 B3+G4:4 | R:1 G3:1 | G3+C4+E4:1.5 D4:0.5 E4:1 G4:1 | G3+B3+D4:1 C4:1 G3+E4:1.5 G3:0.5 | G3+C4+E4:1.5 D4:0.5 E4:1 G4:1 | G3+B3+D4:2 G3+C4:3 | G3:1 | G3+C4+E4:1.5 D4:0.5 E4:1 G4:1 | G3+B3+D4:1 C4:1 G3+E4:1 E4:0.5 E4:0.5 | F3+A3+D4:1.5 C4:0.5 D4:1 E4:1 | F3+A3+C4:2 G3+C4:1 G3:1 | G3+E4:1.5 D4:0.5 E4:1 G4:1 | B3+D4:1 C4:1 G3+E4:1 E4:1 | G3+E4:1.5 D4:0.5 E4:1 G4:1 | B3+D4:2 B3+D4:1 R:0.5 C4:0.5 | G3+E4:1.5 D4:0.5 E4:1 G4:1 | A4:1 B4:1 C5:1 R:0.5 C5:0.5 | A4+D5:1.5 C5:0.5 A4+D5:1 E5:1 | A4+C5:2 G4+C5:1 G4:1 | A4:1.5 G4:0.5 A4:1 C5:1 | E4:1 D4:1 E4:1 G4:1 | A4:1.5 G4:0.5 A4:1 G4:1 | A4:1 E4:1 D4:1 G4:1 | A4:1.5 G4:0.5 A4:1 C5:1 | E4:1.5 D4:0.5 E4:1 G4:1 | A4:1.5 G4:0.5 G4:1 E4:1 | D4:2 C4:1 E4:1 | F#4:1.5 E4:0.5 F#4:1 A4:1 | E4:1 D4:1 F#4:1 D4:0.5 E4:0.5 | F#4:1.5 E4:0.5 F#4:1 A4:1 | E4:2 D4:1 R:0.5 E4:0.5 | F#4:1.5 E4:0.5 F#4:1 A4:1 | E4:1 D4:1 F#4:1 F#4:1 | E4:1.5 D4:0.5 E4:1 F#4:1 | D4:2 D4:1 E4:1 | F#4:1.5 E4:0.5 F#4:1 A4:1 | E4:1 D4:1 F#4:1 R:0.5 E4:0.5 | F#4:1.5 E4:0.5 F#4:1 A4:1 | E4:2 D4:1 R:1 | F#4:1.5 E4:0.5 F#4:1 A4:1 | E4:1 D4:1 F#4:1 A4:1 | B4:1 A4:1 B4:1 C#5:1 | D5:4', 'R:1 | F3:4 | C3:3 R:1 | F3:4 | A2:2 G2:0.5 D3:0.5 G3:0.5 A3:0.5 | B3:4 | R:4 | F2:1 C3:1 F3:1 R:1 | A2:1 B2:1 | C3:2 R:2 | F3:2 E3:1 C3:1 | G3:1 G2:1 | C3:2 C2:2 | C3:2 C2:2 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | R:4 | F2:4 | C3:3 R:1 | F3:1 R:1 C3:1 R:1 | A2:1 R:1 G2:1 R:1 | R:4 | F2:4 | C3:3 R:1 | R:4 | F3:2 C3:2 | G2:6 | R:2 | C3:4 | G2:2 C3:2 | C3:4 | G2:2 C3:3 | R:1 | C3:4 | G2:2 C3:2 | D3:4 | F3:2 C3:2 | C3:1 E3+G3:1 C3:1 E3+G3:1 | G2:1 D3+G3:1 C3:1 E3+G3:1 | C3:1 E3+G3:1 C3:1 E3+G3:1 | G2:1 D3+G3:1 G2:1 D3+G3:1 | C3:1 E3+G3:1 C3:1 E3+G3:1 | G2:1 D3+G3:1 A2:1 E3+A3:1 | D3:1 F3+A3:1 D3:1 F3+A3:1 | G2:1 C3+F3:1 C3:1 E3+G3:1 | F2+C3+F3:1 R:1 R:2 | C2+C3:1 R:1 R:2 | F2+C3+F3:1 R:1 R:2 | R:1 F2+C3+F3:1 G2+D3+G3:1 R:1 | F2+C3+F3:1 R:1 R:2 | C2+C3:1 R:1 R:2 | F2+F3:1 R:1 D2+D3:1 R:1 | R:1 G2+G3:1 C2+C3:1 R:1 | D3:1 F#3+A3:1 D3:1 F#3+A3:1 | A2:1 E3+A3:1 D3:1 F#3+A3:1 | D3:1 F#3+A3:1 D3:1 F#3+A3:1 | A2:1 E3+A3:1 D3:1 F#3+A3:1 | D3:1 F#3+A3:1 D3:1 F#3+A3:1 | A2:1 E3+A3:1 D3:1 F#3+A3:1 | G2:1 D3+G3:1 G2:1 D3+G3:1 | G2:1 D3+G3:1 D3:1 F#3+A3:1 | D3:1 F#3+A3:1 D3:1 F#3+A3:1 | A2:1 E3+A3:1 D3:1 F#3+A3:1 | D3:1 F#3+A3:1 D3:1 F#3+A3:1 | A2:1 E3+A3:1 D3:1 F#3+A3:1 | D3:1 F#3+A3:1 D3:1 F#3+A3:1 | A2:1 E3+A3:1 D3:1 F#3+A3:1 | G2:1 D3+G3:1 G2:1 D3+G3:1 | D3:1 A2:1 D2+D3:1 R:1'),
+    mk('sweden', 'Sweden', 'Minecraft, C418 (both hands)', 44, 'E3+G3:2 A3+D4:2 | F#3+A3:2 C#4+E4:2 | E3+G3+B3:2 A3+D4+F#4:2 | F#3+A3+C#4:2 A3+C#4+E4:2 | E3+G3+B3:2 A3+D4+F#4:2 | F#3+A3+C#4:2 A3+C#4+E4:2 | E3+G3+B3:1 A4:0.5 B4:0.5 A3+D4+F#4:1.5 D4:0.25 E4:0.25 | F#3+A3+C#4:1.5 F#4:0.25 A4:0.25 A3+C#4+E4:2 | E3+G3+B3:0.5 D5:0.5 B4:0.5 A4:0.5 A3+D4+F#4:1.5 D4:0.25 E4:0.25 | F#3+A3+C#4:1.5 A4:0.25 F#4:0.25 A3+C#4+E4:2 | E3+G3+B3:1 A4:0.5 B4:0.5 D4+F#4+D5:1.5 F#5:0.25 E5:0.25 | C#4+C#5:1.5 F#4+D5:0.25 C#5:0.25 A3+C#4+E4+A4:2 | E3+G3+B3:1 B4:0.5 A4:0.5 A3+D4+F#4:1.5 D4:0.25 E4:0.25 | F#3+A3+C#4:1.5 F#4:0.25 A4:0.25 A3+C#4+E4:2 | E3+G3+B3:1 A4:0.5 B4:0.5 A3+D4+F#4:1.5 D4:0.25 E4:0.25 | F#3+A3+C#4:1.5 F#4:0.25 A4:0.25 A3+C#4+E4:2 | E3+G3+B3:1 A4:0.5 B4:0.5 D4+F#4+D5:1.5 D5:0.25 E5:0.25 | C#4+C#5:1 F#5:0.5 F#4:0.25 A4:0.25 A3+C#4+E4:2 | A3+D4+F#4:1.5 B4:0.25 A4:0.25 B3+E4+G#4:1 E4:0.5 D4:0.5 | E3+A3+C#4:1 D4:0.5 E4:0.5 D3+G3+B3:2 | D4+F#4+A4+D5:1.5 B4:0.25 A4:0.25 B3+E4+G#4:1 E4:0.5 D4+E5:0.5 | C#4+E4+A4+C#5:1 D5:0.5 D4+E5:0.25 E4:0.25 B3+D4+G4+B4:6', 'E2:1 F#2:1 G2:1 B2:1 | A2:1 G2:1 D2:2 | E2:1 F#2:1 G2:1 B2:1 | A2:1 G2:1 D2:2 | E2:1 F#2:1 G2:1 B2:1 | A2:1 G2:1 D2:2 | E2:1 F#2:1 G2:1 B2:1 | A2:1 G2:1 D2:2 | E2:1 F#2:1 G2:1 B2:1 | A2:1 G2:1 D2:2 | E2:1 F#2:1 G2+A3:1 B2:0.5 D4:0.25 E4:0.25 | A2+F#3+A3:1 G2:1 D2:2 | E2:1 F#2:1 G2:1 B2:1 | A2:1 G2:1 D2:2 | E2:1 F#2:1 G2:1 B2:1 | A2:1 G2:1 D2:2 | E2:1 F#2:1 G2+A3:1 B2:1 | A2+F#3+A3:1 G2:1 D2:2 | B1+B2:2 E2+E3:2 | A1+A2:2 G1+F#2:2 | B1+B2:2 E2+E3:2 | A1+A2:2 G1+G2:6'),
+    mk('passacaglia', 'Passacaglia', 'Handel, arr. Halvorsen (both hands, slowed from 130)', 100, 'R:4 | R:4 | C5:0.5 C6:0.5 B5:0.5 C6:0.5 A5:0.5 C6:0.5 G5:0.5 C6:0.5 | F5:0.5 C6:0.5 E5:0.5 C6:0.5 D5:0.5 C6:0.5 C5:0.5 C6:0.5 | B4:0.5 B5:0.5 A5:0.5 B5:0.5 G5:0.5 B5:0.5 F5:0.5 B5:0.5 | E5:0.5 B5:0.5 D5:0.5 B5:0.5 C5:0.5 B5:0.5 B4:0.5 B5:0.5 | A4:0.5 A5:0.5 G5:0.5 A5:0.5 F5:0.5 A5:0.5 E5:0.5 A5:0.5 | D5:0.5 A5:0.5 C5:0.5 A5:0.5 B4:0.5 A5:0.5 A4:0.5 A5:0.5 | A5:1 G#5:0.5 F#5:0.5 G#5:1.5 A5:0.5 | A5:4 | C6:0.5 C5:0.5 D5:0.5 C5:0.5 E5:0.5 C5:0.5 F5:0.5 C5:0.5 | G5:0.5 C5:0.5 A5:0.5 C5:0.5 B5:0.5 C5:0.5 C6:0.5 C5:0.5 | B5:0.5 B4:0.5 C5:0.5 B4:0.5 D5:0.5 B4:0.5 E5:0.5 B4:0.5 | F5:0.5 B4:0.5 G5:0.5 B4:0.5 A5:0.5 B4:0.5 B5:0.5 B4:0.5 | A5:0.5 A4:0.5 B4:0.5 A4:0.5 C5:0.5 A4:0.5 D5:0.5 A4:0.5 | E5:0.5 A4:0.5 F5:0.5 A4:0.5 G5:0.5 A4:0.5 A5:0.5 A4:0.5 | A5:1 G#5:0.5 F#5:0.5 G#5:1.5 A5:0.5 | A5:4 | C5:0.5 C6:0.5 B5:0.5 C6:0.5 A5:0.5 C6:0.5 G5:0.5 C6:0.5 | F5:0.5 C6:0.5 E5:0.5 C6:0.5 D5:0.5 C6:0.5 C5:0.5 C6:0.5 | B4:0.5 B5:0.5 A5:0.5 B5:0.5 G5:0.5 B5:0.5 F5:0.5 B5:0.5 | E5:0.5 B5:0.5 D5:0.5 B5:0.5 C5:0.5 B5:0.5 B4:0.5 B5:0.5 | A4:0.5 A5:0.5 G5:0.5 A5:0.5 F5:0.5 A5:0.5 E5:0.5 A5:0.5 | D5:0.5 A5:0.5 C5:0.5 A5:0.5 B4:0.5 A5:0.5 A4:0.5 A5:0.5 | A5:1 G#5:0.5 F#5:0.5 G#5:1.5 A5:0.5 | A5:4 | C6:0.5 C5:0.5 D5:0.5 C5:0.5 E5:0.5 C5:0.5 F5:0.5 C5:0.5 | G5:0.5 C5:0.5 A5:0.5 C5:0.5 B5:0.5 C5:0.5 C6:0.5 C5:0.5 | B5:0.5 B4:0.5 C5:0.5 B4:0.5 D5:0.5 B4:0.5 E5:0.5 B4:0.5 | F5:0.5 B4:0.5 G5:0.5 B4:0.5 A5:0.5 B4:0.5 B5:0.5 B4:0.5 | A5:0.5 A4:0.5 B4:0.5 A4:0.5 C5:0.5 A4:0.5 D5:0.5 A4:0.5 | E5:0.5 A4:0.5 F5:0.5 A4:0.5 G5:0.5 A4:0.5 A5:0.5 A4:0.5 | A5:1 G#5:0.5 F#5:0.5 G#5:1.5 A5:0.5 | A5:4 | C5:0.5 C5:0.5 C6:0.5 C5:0.5 B5:0.5 C5:0.5 A5:0.5 C5:0.5 | G5:0.5 C5:0.5 F5:0.5 C5:0.5 E5:0.5 C5:0.5 D5:0.5 C5:0.5 | B4:0.5 B4:0.5 B5:0.5 B4:0.5 A5:0.5 B4:0.5 G5:0.5 B4:0.5 | F5:0.5 B4:0.5 E5:0.5 B4:0.5 D5:0.5 B4:0.5 C5:0.5 B4:0.5 | A4:0.5 A4:0.5 A5:0.5 A4:0.5 G5:0.5 A4:0.5 F5:0.5 A4:0.5 | E5:0.5 A4:0.5 D5:0.5 A4:0.5 C5:0.5 A4:0.5 B4:0.5 A4:0.5 | A4:1 G#4:0.5 F#4:0.5 G#4:1.5 A4:0.5 | A4:4 | C5:0.5 C6:0.5 B4:0.5 B5:0.5 A4:0.5 A5:0.5 G4:0.5 G5:0.5 | F4:0.5 F5:0.5 E4:0.5 E5:0.5 D4:0.5 D5:0.5 C4:0.5 C5:0.5 | B4:0.5 B5:0.5 A4:0.5 A5:0.5 G4:0.5 G5:0.5 F4:0.5 F5:0.5 | E4:0.5 E5:0.5 D4:0.5 D5:0.5 C4:0.5 C5:0.5 B3:0.5 B4:0.5 | A4:0.5 A5:0.5 G4:0.5 G5:0.5 F4:0.5 F5:0.5 E4:0.5 E5:0.5 | D4:0.5 D5:0.5 C4:0.5 C5:0.5 B3:0.5 B4:0.5 A3:0.5 A4:0.5 | A4:1 G#4:0.5 F#4:0.5 G#4:1.5 A4:0.5 | A4:4 | C5:0.5 C6:0.5 B5:0.5 C6:0.5 A5:0.5 C6:0.5 G5:0.5 C6:0.5 | F5:0.5 C6:0.5 E5:0.5 C6:0.5 D5:0.5 C6:0.5 C5:0.5 C6:0.5 | B4:0.5 B5:0.5 A5:0.5 B5:0.5 G5:0.5 B5:0.5 F5:0.5 B5:0.5 | E5:0.5 B5:0.5 D5:0.5 B5:0.5 C5:0.5 B5:0.5 B4:0.5 B5:0.5 | A4:0.5 A5:0.5 G5:0.5 A5:0.5 F5:0.5 A5:0.5 E5:0.5 A5:0.5 | D5:0.5 A5:0.5 C5:0.5 A5:0.5 B4:0.5 A5:0.5 A4:0.5 A5:0.5 | A5:1 G#5:0.5 F#5:0.5 G#5:1.5 A5:0.5 | A5:4 | C6:0.5 C5:0.5 D5:0.5 C5:0.5 E5:0.5 C5:0.5 F5:0.5 C5:0.5 | G5:0.5 C5:0.5 A5:0.5 C5:0.5 B5:0.5 C5:0.5 C6:0.5 C5:0.5 | B5:0.5 B4:0.5 C5:0.5 B4:0.5 D5:0.5 B4:0.5 E5:0.5 B4:0.5 | F5:0.5 B4:0.5 G5:0.5 B4:0.5 A5:0.5 B4:0.5 B5:0.5 B4:0.5 | A5:0.5 A4:0.5 B4:0.5 A4:0.5 C5:0.5 A4:0.5 D5:0.5 A4:0.5 | E5:0.5 A4:0.5 F5:0.5 A4:0.5 G5:0.5 A4:0.5 A5:0.5 A4:0.5 | A5:1 G#5:0.5 F#5:0.5 G#5:1.5 A5:0.5 | A5:4 | C5:0.5 C6:0.5 B5:0.5 C6:0.5 A5:0.5 C6:0.5 G5:0.5 C6:0.5 | F5:0.5 C6:0.5 E5:0.5 C6:0.5 D5:0.5 C6:0.5 C5:0.5 C6:0.5 | B4:0.5 B5:0.5 A5:0.5 B5:0.5 G5:0.5 B5:0.5 F5:0.5 B5:0.5 | E5:0.5 B5:0.5 D5:0.5 B5:0.5 C5:0.5 B5:0.5 B4:0.5 B5:0.5 | A4:0.5 A5:0.5 G5:0.5 A5:0.5 F5:0.5 A5:0.5 E5:0.5 A5:0.5 | D5:0.5 A5:0.5 C5:0.5 A5:0.5 B4:0.5 A5:0.5 A4:0.5 A5:0.5 | A5:1 G#5:0.5 F#5:0.5 G#5:1.5 A5:0.5 | A5:4', 'A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | G2:0.5 G3:0.5 D4:0.5 B3:0.5 G4:0.5 B3:0.5 D4:0.5 B3:0.5 | C2:0.5 C3:0.5 G3:0.5 E3:0.5 C4:0.5 E3:0.5 G3:0.5 E3:0.5 | F2:0.5 F3:0.5 C4:0.5 A3:0.5 F4:0.5 A3:0.5 C4:0.5 A3:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | E2:0.5 E3:0.5 B3:0.5 G#3:0.5 E4:0.5 G#3:0.5 B3:0.5 G#3:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | G2:0.5 G3:0.5 D4:0.5 B3:0.5 G4:0.5 B3:0.5 D4:0.5 B3:0.5 | C2:0.5 C3:0.5 G3:0.5 E3:0.5 C4:0.5 E3:0.5 G3:0.5 E3:0.5 | F2:0.5 F3:0.5 C4:0.5 A3:0.5 F4:0.5 A3:0.5 C4:0.5 A3:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | E2:0.5 E3:0.5 B3:0.5 G#3:0.5 E4:0.5 G#3:0.5 B3:0.5 G#3:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | G2:0.5 G3:0.5 D4:0.5 B3:0.5 G4:0.5 B3:0.5 D4:0.5 B3:0.5 | C2:0.5 C3:0.5 G3:0.5 E3:0.5 C4:0.5 E3:0.5 G3:0.5 E3:0.5 | F2:0.5 F3:0.5 C4:0.5 A3:0.5 F4:0.5 A3:0.5 C4:0.5 A3:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | E2:0.5 E3:0.5 B3:0.5 G#3:0.5 E4:0.5 G#3:0.5 B3:0.5 G#3:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | G2:0.5 G3:0.5 D4:0.5 B3:0.5 G4:0.5 B3:0.5 D4:0.5 B3:0.5 | C2:0.5 C3:0.5 G3:0.5 E3:0.5 C4:0.5 E3:0.5 G3:0.5 E3:0.5 | F2:0.5 F3:0.5 C4:0.5 A3:0.5 F4:0.5 A3:0.5 C4:0.5 A3:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | E2:0.5 E3:0.5 B3:0.5 G#3:0.5 E4:0.5 G#3:0.5 B3:0.5 G#3:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | G2:0.5 G3:0.5 D4:0.5 B3:0.5 G4:0.5 B3:0.5 D4:0.5 B3:0.5 | C2:0.5 C3:0.5 G3:0.5 E3:0.5 C4:0.5 E3:0.5 G3:0.5 E3:0.5 | F2:0.5 F3:0.5 C4:0.5 A3:0.5 F4:0.5 A3:0.5 C4:0.5 A3:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | E2:0.5 E3:0.5 B3:0.5 G#3:0.5 E4:0.5 G#3:0.5 B3:0.5 G#3:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | G2:0.5 G3:0.5 D4:0.5 B3:0.5 G4:0.5 B3:0.5 D4:0.5 B3:0.5 | C2:0.5 C3:0.5 G3:0.5 E3:0.5 C4:0.5 E3:0.5 G3:0.5 E3:0.5 | F2:0.5 F3:0.5 C4:0.5 F3:0.5 C4:0.5 A3:0.5 C4:0.5 A3:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 A3:0.5 F3:0.5 A3:0.5 F3:0.5 | E2:0.5 E3:0.5 B3:0.5 G#3:0.5 E4:0.5 G#3:0.5 B3:0.5 G#3:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | G2:0.5 G3:0.5 D4:0.5 B3:0.5 G4:0.5 B3:0.5 D4:0.5 B3:0.5 | C2:0.5 C3:0.5 G3:0.5 E3:0.5 C4:0.5 E3:0.5 G3:0.5 E3:0.5 | F2:0.5 F3:0.5 C4:0.5 A3:0.5 F4:0.5 A3:0.5 C4:0.5 A3:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | E2:0.5 E3:0.5 B3:0.5 G#3:0.5 E4:0.5 G#3:0.5 B3:0.5 G#3:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | G2:0.5 G3:0.5 D4:0.5 B3:0.5 G4:0.5 B3:0.5 D4:0.5 B3:0.5 | C2:0.5 C3:0.5 G3:0.5 E3:0.5 C4:0.5 E3:0.5 G3:0.5 E3:0.5 | F2:0.5 F3:0.5 C4:0.5 A3:0.5 F4:0.5 A3:0.5 C4:0.5 A3:0.5 | D2:0.5 D3:0.5 A3:0.5 F3:0.5 D4:0.5 F3:0.5 A3:0.5 F3:0.5 | E2:0.5 E3:0.5 B3:0.5 G#3:0.5 E4:0.5 G#3:0.5 B3:0.5 G#3:0.5 | A2:0.5 A3:0.5 E4:0.5 C4:0.5 A4:0.5 C4:0.5 E4:0.5 C4:0.5 | A2+A3:4 | D2+D3:4 | G2+G3:4 | C2+C3:4 | F2+F3:4 | D2+D3:4 | E2+E3:4 | A2+A3:4'),
+    mk('kiss', 'Kiss the Girl', 'The Little Mermaid, Alan Menken (melody only)', 108, 'R:1 C4:2 C4:0.5 D4:1 E4:2.5 R:1 C4:0.5 C4:0.5 C4:0.5 C4:0.5 C4:1 D4:0.5 E4:1.5 R:3 | F4:0.5 F4:0.5 F4:0.5 F4:0.5 F4:1 C4:0.5 A3:1 A3:0.5 C4:1 F4:0.5 F4:1 G4:0.5 | F4:1 E4:3 | R:3 G4:0.5 G4:0.5 | A4:0.5 B4:1 G4:1.5 D4:0.5 E4:0.5 | F4:0.5 F4:1 E4:0.5 F4:0.5 E4:0.5 F4:0.5 E4:0.5 | R:0.5 F4:1 E4:0.5 C4:2 | R:4 | R:1 C4:2 C4:0.5 D4:1 E4:1.5 R:2 | C4:0.5 C4:0.5 C4:0.5 C4:0.5 C4:1 D4:0.5 E4:1.5 R:3 | F4:0.5 F4:0.5 F4:0.5 F4:0.5 F4:1 C4:0.5 A3:1 A3:0.5 C4:0.5 F4:1 F4:1 G4:0.5 | F4:1 E4:3 | R:3 G4:0.5 G4:0.5 | A4:0.5 B4:1 G4:1.5 D4:0.5 E4:0.5 | F4:1 F4:0.5 F4:1 E4:0.5 F4:0.5 E4:0.5 | R:0.5 F4:1 E4:0.5 C4:2 | R:4 | R:1 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 | A4:0.5 B4:1 C5:1 A4:0.5 A4:0.5 A4:0.5 | A4:0.5 G4:1 C5:1 G4:0.5 G4:0.5 G4:0.5 | R:0.5 A4:1 G4:0.5 G4:2 | R:1 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 | A4:0.5 B4:1 C5:1 A4:0.5 A4:0.5 A4:0.5 | A4:1 G4:0.5 G4:1 D4:0.5 D4:0.5 E4:0.5 | D4:1 C4:0.5 C4:2.5 | E5:0.5 D5:0.5 C5:0.5 A4:0.5 G4:0.5 A4:0.5 E4:0.5 D4:0.5 | C4:3 C4:0.5 D4:1 E4:3.5 | C4:0.5 C4:0.5 C4:0.5 C4:0.5 C4:1 D4:0.5 E4:1.5 R:3 | F4:0.5 F4:0.5 F4:0.5 F4:0.5 F4:0.5 C4:1 A3:1 C4:1.5 F4:1 F4:0.5 G4:0.5 | F4:0.5 F4:1 E4:0.5 F4:0.5 E4:0.5 F4:0.5 E4:0.5 | R:0.5 F4:1 E4:0.5 C4:2 | R:4 | R:1 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 | A4:0.5 B4:1 C5:1 A4:0.5 A4:0.5 A4:0.5 | A4:0.5 B4:1 C5:1 A4:0.5 A4:0.5 A4:0.5 | A4:0.5 G4:1 C5:1 G4:0.5 G4:0.5 G4:0.5 | R:0.5 A4:1 G4:0.5 G4:2 | R:1 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 | A4:0.5 B4:1 C5:1 A4:0.5 A4:0.5 A4:0.5 | A4:0.5 B4:1 C5:1 A4:0.5 A4:0.5 A4:0.5 | A4:1 G4:0.5 G4:1 D4:0.5 D4:0.5 E4:0.5 | R:0.5 D4:1 C4:0.5 C4:2 | R:1 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 | A4:0.5 B4:1 C5:1 A4:0.5 A4:0.5 A4:0.5 | A4:0.5 B4:1 C5:1 A4:0.5 A4:0.5 A4:0.5 | A4:0.5 G4:1 C5:1 G4:0.5 G4:0.5 G4:0.5 | R:0.5 A4:1 G4:0.5 G4:2 | R:1 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 G4:0.5 | A4:0.5 B4:1 C5:1 A4:0.5 A4:0.5 A4:0.5 | A4:0.5 B4:1 C5:1 A4:0.5 A4:0.5 A4:0.5 | A4:1 G4:0.5 G4:1 D4:0.5 D4:0.5 E4:0.5 | R:0.5 F4:1 E4:0.5 C4:2 | R:1.5 G4:1 E4:1 C4:0.5 | R:0.5 F4:1 E4:0.5 C4:2 | R:2.5 G4:0.5 A4:0.5 A4:0.5 | R:0.5 A4:1 G4:0.5 E4:2 | R:2.5 C5:0.5 C5:0.5 C5:0.5 | R:0.5 F4:1 E4:0.5 C4:2 | R:2.5 C5:0.5 C5:0.5 A4:0.5 | R:0.5 F4:1 E4:0.5 C4:2 | E5:2 E5:1 F5:1 | G5:1 R:3', '')
+  ];
+  let SONGS = [];
+  const refreshSongs = () => { SONGS = BUILTIN.concat(store.custom.map((c) => ({ id: c.id, title: c.title, by: c.by, bpm: c.bpm, custom: true, notes: c.notes.map(([m, b, d, h]) => ({ m, b, d, h })) }))); };
+  const G = { song: null, notes: [], groups: [], t: -2, state: 'idle', mode: 'wait', demo: false, bpm: 80, spb: 0.75, end: 0, hit: 0, miss: 0, wrong: 0, total: 0, gi: 0, di: 0, sound: [], waiting: false, lastWrong: 0, delay: 0.12 };
+  const gStatus = (t, cls) => { const f = $('#gStatus'); f.textContent = t; f.className = 'feed' + (cls ? ' ' + cls : ''); };
+  const updScore = () => {
+    $('#gScore').textContent = G.song ? (G.mode === 'wait' ? 'Notes ' + G.hit + ' / ' + G.total + ' · wrong ' + G.wrong : 'Hit ' + G.hit + ' / ' + G.total + ' · missed ' + G.miss + ' · wrong ' + G.wrong) : '';
+  };
+  function renderSongSel() {
+    const opt = (s) => { const b = store.songs[s.id]; return '<option value="' + s.id + '"' + (G.song && G.song.id === s.id ? ' selected' : '') + '>' + esc(s.title) + (b ? '  (best ' + b.best + '%)' : '') + '</option>'; };
+    const mine = SONGS.filter((s) => s.custom);
+    $('#songSel').innerHTML = mine.length ? '<optgroup label="Built in">' + BUILTIN.map(opt).join('') + '</optgroup><optgroup label="My songs">' + mine.map(opt).join('') + '</optgroup>' : BUILTIN.map(opt).join('');
+  }
+  function compile() {
+    G.spb = 60 / G.bpm;
+    G.notes = G.song.notes.map((n) => ({ m: n.m, start: n.b * G.spb, dur: n.d * G.spb, h: n.h, st: 'pending' }));
+    G.total = G.notes.length; G.groups = [];
+    G.notes.forEach((n, i) => { const last = G.groups[G.groups.length - 1]; if (last && Math.abs(last.start - n.start) < 1e-6) last.idx.push(i); else G.groups.push({ start: n.start, idx: [i] }); });
+    G.end = Math.max(...G.notes.map((n) => n.start + n.dur));
+  }
+  function stopDemoSound() { G.sound.forEach((s) => stopNote(s.id)); G.sound = []; }
+  function resetGame() {
+    stopDemoSound(); G.demo = false;
+    G.mode = document.querySelector('input[name=gmode]:checked').value;
+    G.state = 'idle'; G.t = G.mode === 'time' ? -3 : -1.5;
+    G.hit = G.miss = G.wrong = 0; G.gi = 0; G.di = 0; G.waiting = false;
+    G.notes.forEach((n) => { n.st = 'pending'; });
+    updScore(); updateBtns();
+    gStatus(MIC.on ? 'Press Start, then play each note as its tile reaches the keys.' : 'Press Start. The microphone is off, so play with the on-screen or computer keys.');
+  }
+  function loadSong(id) {
+    G.song = SONGS.find((s) => s.id === id) || SONGS[0]; G.bpm = G.song.bpm;
+    const db = $('#delBtn'); db.hidden = !G.song.custom; db.dataset.arm = ''; db.textContent = 'Delete this song';
+    $('#tempo').value = G.bpm; $('#tempoOut').textContent = G.bpm;
+    compile(); resetGame();
+    const ms = G.notes.map((n) => n.m), c = (Math.min(...ms) + Math.max(...ms)) / 2;
+    const mid = isBlack(Math.round(c)) ? Math.round(c) - 1 : Math.round(c);
+    scrollEl.scrollLeft = keyX(mid) - scrollEl.clientWidth / 2;
+  }
+  const curGroup = () => { while (G.gi < G.groups.length && G.groups[G.gi].idx.every((i) => G.notes[i].st !== 'pending')) G.gi++; return G.groups[G.gi] || null; };
+  function gameHints() {
+    const s = new Set(); if (!G.song || G.demo || G.state === 'done') return s;
+    if (G.mode === 'wait') {
+      const gr = curGroup();
+      if (gr && (G.waiting || gr.start - G.t < 0.6)) gr.idx.forEach((i) => { if (G.notes[i].st === 'pending') s.add(G.notes[i].m); });
+    } else {
+      const tt = G.t - (MIC.on ? G.delay : 0);
+      G.notes.forEach((n) => { if (n.st === 'pending' && n.start - tt < 0.2 && n.start - tt > -0.4) s.add(n.m); });
+    }
+    return s;
+  }
+  function wrongNote(m) {
+    const now = performance.now(); if (now - G.lastWrong < 300) return; G.lastWrong = now;
+    G.wrong++; flash(m, 'bad', 450); updScore();
+    gStatus('Heard ' + nameOf(m) + ', which is not one of the notes right now.', 'bad');
+  }
+  function gameStrike(m, fromMic) {
+    if (G.state !== 'running' || G.demo) return;
+    if (G.mode === 'wait') {
+      const gr = curGroup(); if (!gr) return;
+      const i = gr.idx.find((j) => G.notes[j].st === 'pending' && G.notes[j].m === m);
+      if (i != null) {
+        G.notes[i].st = 'hit'; G.hit++; flash(m, 'ok', 300); updScore(); gStatus('');
+        if (gr.idx.every((j) => G.notes[j].st !== 'pending')) G.waiting = false;
+      } else if (!fromMic || $('#strictWrong').checked) wrongNote(m);
+    } else {
+      const tt = G.t - (fromMic ? G.delay : 0); let best = -1, bd = 1e9;
+      G.notes.forEach((n, i) => { if (n.st === 'pending' && n.m === m) { const d = Math.abs(n.start - tt); if (d < bd && d <= 0.4) { bd = d; best = i; } } });
+      if (best >= 0) { G.notes[best].st = 'hit'; G.hit++; flash(m, 'ok', 300); updScore(); gStatus(''); } else if (!fromMic || $('#strictWrong').checked) wrongNote(m);
+    }
+  }
+  function finishGame() {
+    G.state = 'done'; updateBtns();
+    const n = G.total, acc = G.mode === 'wait' ? Math.round(100 * n / (n + G.wrong)) : Math.round(100 * G.hit / n);
+    const prev = store.songs[G.song.id] || { plays: 0, best: 0 };
+    store.songs[G.song.id] = { plays: prev.plays + 1, best: Math.max(prev.best, acc) }; save(); renderSongSel();
+    gStatus('Finished with ' + acc + '% ' + (G.mode === 'wait' ? 'accuracy' : 'of notes on time') + (G.wrong ? ' and ' + G.wrong + ' wrong ' + (G.wrong === 1 ? 'note.' : 'notes.') : ', no wrong notes.'), 'good');
+  }
+  function gameTick(dt) {
+    if (G.state !== 'running') return;
+    if (G.demo) {
+      MIC.muteUntil = performance.now() + 400;
+      G.t += dt;
+      while (G.di < G.notes.length && G.notes[G.di].start <= G.t) { const n = G.notes[G.di]; startNote(n.m, 'demo' + G.di); G.sound.push({ id: 'demo' + G.di, at: n.start + n.dur * 0.9 }); G.di++; }
+      G.sound = G.sound.filter((s) => { if (G.t >= s.at) { stopNote(s.id); return false; } return true; });
+      if (G.t > G.end + 0.6) { resetGame(); gStatus('Now your turn. Press Start.'); }
+      return;
+    }
+    if (G.mode === 'wait') {
+      const gr = curGroup();
+      if (!gr) { G.t += dt; if (G.t > G.end + 0.4) finishGame(); return; }
+      const nt = G.t + dt;
+      if (nt >= gr.start) { G.t = Math.max(G.t, gr.start); G.waiting = true; } else { G.t = nt; G.waiting = false; }
+    } else {
+      G.t += dt;
+      const tt = G.t - (MIC.on ? G.delay : 0);
+      G.notes.forEach((n) => { if (n.st === 'pending' && tt > n.start + 0.4) { n.st = 'miss'; G.miss++; updScore(); } });
+      if (G.t > G.end + 0.6 && G.notes.every((n) => n.st !== 'pending')) finishGame();
+    }
+  }
+  function updateBtns() {
+    $('#gPlay').textContent = G.state === 'running' && !G.demo ? 'Pause' : G.state === 'paused' ? 'Resume' : G.state === 'done' ? 'Play again' : 'Start';
+    $('#gDemo').textContent = G.demo ? 'Stop' : 'Hear it first';
+  }
+  function pauseGame() { if (G.demo) { resetGame(); return; } G.state = 'paused'; updateBtns(); gStatus('Paused.'); }
+  $('#gPlay').addEventListener('click', () => {
+    audio();
+    if (G.demo) resetGame();
+    if (G.state === 'running') pauseGame();
+    else { if (G.state === 'done') resetGame(); G.state = 'running'; updateBtns(); gStatus(''); }
+  });
+  $('#gRestart').addEventListener('click', resetGame);
+  $('#gDemo').addEventListener('click', () => {
+    if (G.demo) { resetGame(); return; }
+    resetGame(); audio(); G.demo = true; G.t = -1; G.state = 'running'; updateBtns(); gStatus('Listening to the song. Watch where the tiles land.');
+  });
+  $('#songSel').addEventListener('change', (e) => loadSong(e.target.value));
+  document.querySelectorAll('input[name=gmode]').forEach((r) => r.addEventListener('change', resetGame));
+  $('#tempo').addEventListener('input', (e) => { G.bpm = +e.target.value; $('#tempoOut').textContent = G.bpm; compile(); resetGame(); });
+
+  /* ---------- Adding songs ---------- */
+  /*MIDI-START*/
+  function parseMidi(buf) {
+    const d = new DataView(buf), u = new Uint8Array(buf);
+    const str = (p, n) => String.fromCharCode.apply(null, u.slice(p, p + n));
+    if (buf.byteLength < 14 || str(0, 4) !== 'MThd') throw new Error('That does not look like a MIDI file.');
+    const hl = d.getUint32(4), ntr = d.getUint16(10), div = d.getUint16(12);
+    if (div & 0x8000 || div === 0) throw new Error('This MIDI file uses a timing format Keystep can\'t read.');
+    let p = 8 + hl, mpq = null; const tracks = [];
+    for (let ti = 0; ti < ntr && p + 8 <= buf.byteLength; ti++) {
+      const len = d.getUint32(p + 4), isTrk = str(p, 4) === 'MTrk';
+      let q = p + 8; const end = Math.min(p + 8 + len, buf.byteLength); p = p + 8 + len;
+      if (!isTrk) continue;
+      let tick = 0, run = 0, name = ''; const open = new Map(), notes = [];
+      const vlq = () => { let v = 0, b; do { b = u[q++]; v = v * 128 + (b & 0x7f); } while ((b & 0x80) && q < end); return v; };
+      while (q < end) {
+        tick += vlq(); let st = u[q];
+        if (st === 0xFF) { const type = u[q + 1]; q += 2; const l = vlq(); if (type === 0x51 && mpq === null && l === 3) mpq = (u[q] << 16) | (u[q + 1] << 8) | u[q + 2]; if (type === 0x03) name = str(q, l); q += l; continue; }
+        if (st === 0xF0 || st === 0xF7) { q++; q += vlq(); continue; }
+        if (st & 0x80) { run = st; q++; } else st = run;
+        const kind = st >> 4, ch = st & 15;
+        if (kind === 0x9 || kind === 0x8) {
+          const n = u[q++], v = u[q++], key = ch * 128 + n;
+          if (kind === 0x9 && v > 0) { if (!open.has(key)) open.set(key, []); open.get(key).push(tick); }
+          else { const arr = open.get(key); if (arr && arr.length) { const t0 = arr.shift(); if (ch !== 9) notes.push({ m: n, t: t0, dt: tick - t0 }); } }
+        } else if (kind === 0xC || kind === 0xD) q += 1; else q += 2;
+      }
+      tracks.push({ name: name.trim(), notes });
+    }
+    return { div, mpq: mpq || 500000, tracks };
+  }
+  function songFromMidi(mi, part) {
+    let raw = []; (part === 'all' ? mi.tracks : [mi.tracks[+part]]).forEach((t) => { raw = raw.concat(t.notes); });
+    let dropped = 0; const seen = new Set(), out = [];
+    raw.forEach((n) => {
+      if (n.m < LO || n.m > HI) { dropped++; return; }
+      const b = Math.round(n.t / mi.div * 16) / 16, dd = Math.min(16, Math.max(1 / 16, Math.round(n.dt / mi.div * 16) / 16)), k = n.m + '@' + b;
+      if (seen.has(k)) return; seen.add(k); out.push({ m: n.m, b, d: dd, h: n.m >= 60 ? 'R' : 'L' });
+    });
+    if (!out.length) throw new Error('No notes in the piano range were found in that part.');
+    if (out.length > 2500) throw new Error('That part has ' + out.length + ' notes, more than Keystep keeps in one song (2,500). Pick a single track or a shorter piece.');
+    const b0 = out.reduce((a, n) => Math.min(a, n.b), 1e9); out.forEach((n) => { n.b -= b0; });
+    out.sort((x, y) => x.b - y.b || x.m - y.m);
+    return { bpm: Math.max(30, Math.min(200, Math.round(60e6 / mi.mpq))), notes: out, by: 'From a MIDI file', dropped };
+  }
+  /*MIDI-END*/
+  function songFromText(rh, lh, bpm) {
+    if (!(bpm >= 30 && bpm <= 200)) throw new Error('Tempo should be between 30 and 200 beats per minute.');
+    const notes = parseSeq(rh, 'R').concat(parseSeq(lh, 'L')).sort((x, y) => x.b - y.b || x.m - y.m);
+    if (!notes.length) throw new Error('Type at least one note first.');
+    if (notes.length > 2500) throw new Error('That is more than 2,500 notes. Try a shorter piece.');
+    return { bpm: Math.round(bpm), notes, by: 'Typed in', dropped: 0 };
+  }
+  const addMsg = (t, cls) => { const f = $('#addMsg'); f.textContent = t; f.className = 'feed' + (cls ? ' ' + cls : ''); };
+  let midi = null, xml = null, addKind = 'midi', kindTouched = false;
+  const KINDS = { midi: '#addMidi', xml: '#addXml', photo: '#addPhoto', text: '#addText' };
+  function setKind(k) {
+    addKind = k; Object.keys(KINDS).forEach((x) => { $(KINDS[x]).hidden = x !== k; });
+    const r = document.querySelector('input[name=addkind][value=' + k + ']'); if (r) r.checked = true; addMsg('');
+  }
+  document.querySelectorAll('input[name=addkind]').forEach((r) => r.addEventListener('change', () => { kindTouched = true; setKind(r.value); }));
+  $('#addBtn').addEventListener('click', () => { const pn = $('#addPanel'); pn.hidden = !pn.hidden; addMsg(''); });
+  $('#addCancel').addEventListener('click', () => { $('#addPanel').hidden = true; });
+  $('#midiFile').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    midi = null; $('#midiOpts').hidden = true;
+    if (f.size > 2e6) { addMsg('That file is over 2 MB. Try a piano-only version of the piece.', 'bad'); return; }
+    try { midi = parseMidi(await f.arrayBuffer()); } catch (err) { addMsg(err.message, 'bad'); return; }
+    const withNotes = midi.tracks.map((t, i) => ({ t, i })).filter((x) => x.t.notes.length);
+    const total = withNotes.reduce((a, x) => a + x.t.notes.length, 0);
+    if (!total) { midi = null; addMsg('That MIDI file has no notes in it.', 'bad'); return; }
+    $('#midiPart').innerHTML = '<option value="all">Everything (' + total + ' notes)</option>' + withNotes.map((x) => '<option value="' + x.i + '">' + esc(x.t.name || ('Track ' + (x.i + 1))) + ' (' + x.t.notes.length + ' notes)</option>').join('');
+    $('#addTitle').value = f.name.replace(/\.[^.]+$/, '').slice(0, 60);
+    $('#midiOpts').hidden = false; addMsg('Found ' + total + ' notes. Choose the part you want, then add the song.');
+  });
+  $('#addSave').addEventListener('click', () => {
+    try {
+      const title = $('#addTitle').value.trim() || 'My song';
+      const song = buildSong();
+      const id = 'c' + Date.now().toString(36);
+      store.custom.push({ id, title, by: song.by, bpm: song.bpm, notes: song.notes.map((n) => [n.m, n.b, n.d, n.h]) });
+      const saved = save();
+      refreshSongs(); renderSongSel(); loadSong(id); renderSongSel();
+      $('#addPanel').hidden = true;
+      gStatus('Added "' + title + '"' + (song.dropped ? ' (' + song.dropped + ' notes outside the piano range were skipped)' : '') + (saved ? '. Press Start.' : '. This browser would not save it, so it will be gone when you close the page.'), saved ? 'good' : 'bad');
+    } catch (err) { addMsg(err.message, 'bad'); }
+  });
+  let delTimer = null;
+  $('#delBtn').addEventListener('click', () => {
+    const b = $('#delBtn'); if (!G.song || !G.song.custom) return;
+    if (b.dataset.arm !== '1') { b.dataset.arm = '1'; b.textContent = 'Click again to delete'; clearTimeout(delTimer); delTimer = setTimeout(() => { b.dataset.arm = ''; b.textContent = 'Delete this song'; }, 4000); return; }
+    clearTimeout(delTimer); const id = G.song.id;
+    store.custom = store.custom.filter((c) => c.id !== id); delete store.songs[id]; save();
+    refreshSongs(); loadSong('twinkle'); renderSongSel(); gStatus('Song deleted.');
+  });
+
+  function buildSong() {
+    if (addKind === 'midi') { if (!midi) throw new Error('Choose a MIDI file first.'); return songFromMidi(midi, $('#midiPart').value); }
+    if (addKind === 'xml') { if (!xml) throw new Error('Choose a MusicXML file first.'); return songFromParts(xml, $('#xmlPart').value); }
+    if (addKind === 'photo') throw new Error('Press "Read the music" first. When the notes appear, check them and press Add song.');
+    return songFromText($('#txtR').value, $('#txtL').value, +$('#txtBpm').value);
+  }
+
+  /* MusicXML */
+  /*XML-START*/
+  async function unzipMxl(buf) {
+    const u = new Uint8Array(buf), d = new DataView(buf); let e = -1;
+    for (let i = u.length - 22; i >= Math.max(0, u.length - 70000); i--) if (d.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error('That .mxl file looks damaged.');
+    const n = d.getUint16(e + 10, true); let p = d.getUint32(e + 16, true); const files = {};
+    for (let i = 0; i < n; i++) {
+      if (d.getUint32(p, true) !== 0x02014b50) break;
+      const method = d.getUint16(p + 10, true), csz = d.getUint32(p + 20, true), nl = d.getUint16(p + 28, true), el = d.getUint16(p + 30, true), cl = d.getUint16(p + 32, true), lo = d.getUint32(p + 42, true);
+      files[new TextDecoder().decode(u.subarray(p + 46, p + 46 + nl))] = { method, csz, lo }; p += 46 + nl + el + cl;
+    }
+    const read = async (name) => {
+      const f = files[name]; if (!f) return null;
+      const start = f.lo + 30 + d.getUint16(f.lo + 26, true) + d.getUint16(f.lo + 28, true), data = u.subarray(start, start + f.csz);
+      if (f.method === 0) return new TextDecoder().decode(data);
+      if (f.method !== 8 || typeof DecompressionStream === 'undefined') throw new Error('This browser can\'t open .mxl files. Export an uncompressed .musicxml file instead.');
+      return new TextDecoder().decode(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    };
+    let root = null; const c = await read('META-INF/container.xml');
+    if (c) { const m = /full-path="([^"]+)"/.exec(c); if (m) root = m[1]; }
+    if (!root || !files[root]) root = Object.keys(files).find((k) => !k.startsWith('META-INF') && /\.(xml|musicxml)$/i.test(k));
+    if (!root) throw new Error('No score was found inside that .mxl file.');
+    return read(root);
+  }
+  function parseMusicXml(text) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('That file is not valid MusicXML.');
+    const root = doc.documentElement;
+    if (root.tagName !== 'score-partwise') throw new Error('This MusicXML is not in the usual "partwise" layout. Export it again from your notation program as MusicXML.');
+    const kid = (el, tag) => { for (const c of el.children) if (c.tagName === tag) return c; return null; };
+    const txt = (el, tag) => { const k = el && kid(el, tag); return k ? k.textContent.trim() : null; };
+    const names = {}; doc.querySelectorAll('part-list > score-part').forEach((sp) => { names[sp.getAttribute('id')] = txt(sp, 'part-name') || ''; });
+    const STEP = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+    let bpm = null; const parts = [];
+    doc.querySelectorAll('score-partwise > part').forEach((part) => {
+      let div = 1, startB = 0, hasStaff2 = false; const notes = [], tied = {};
+      for (const meas of part.children) {
+        if (meas.tagName !== 'measure') continue;
+        let pos = 0, maxPos = 0, last = 0;
+        for (const el of meas.children) {
+          const tg = el.tagName;
+          if (tg === 'attributes') { const dv = parseFloat(txt(el, 'divisions')); if (dv > 0) div = dv; }
+          else if (tg === 'direction' || tg === 'sound') {
+            const sd = tg === 'sound' ? el : el.querySelector('sound[tempo]');
+            if (bpm == null && sd && sd.getAttribute('tempo')) bpm = parseFloat(sd.getAttribute('tempo'));
+            else if (bpm == null) { const mt = el.querySelector('metronome'), pm = mt && kid(mt, 'per-minute'); if (pm && (txt(mt, 'beat-unit') || 'quarter') === 'quarter' && !kid(mt, 'beat-unit-dot')) bpm = parseFloat(pm.textContent); }
+          }
+          else if (tg === 'backup') pos -= parseFloat(txt(el, 'duration')) || 0;
+          else if (tg === 'forward') { pos += parseFloat(txt(el, 'duration')) || 0; if (pos > maxPos) maxPos = pos; }
+          else if (tg === 'note') {
+            if (kid(el, 'grace')) continue;
+            const dur = parseFloat(txt(el, 'duration')) || 0, chord = !!kid(el, 'chord'), s0 = chord ? last : pos;
+            if (!chord) { last = pos; pos += dur; if (pos > maxPos) maxPos = pos; }
+            const pt = kid(el, 'pitch'); if (!pt) continue;
+            const m = STEP[txt(pt, 'step')] + Math.round(parseFloat(txt(pt, 'alter')) || 0) + (parseInt(txt(pt, 'octave'), 10) + 1) * 12;
+            const staff = parseInt(txt(el, 'staff'), 10) || 1; if (staff >= 2) hasStaff2 = true;
+            const b = startB + s0 / div, d = dur / div, ties = [...el.children].filter((c) => c.tagName === 'tie').map((c) => c.getAttribute('type'));
+            const key = m + ':' + staff;
+            if (ties.includes('stop') && tied[key] && Math.abs(tied[key].b + tied[key].d - b) < 1e-3) { tied[key].d += d; if (!ties.includes('start')) delete tied[key]; }
+            else { const nt = { m, b, d, staff }; notes.push(nt); if (ties.includes('start')) tied[key] = nt; }
+          }
+        }
+        startB += maxPos / div;
+      }
+      parts.push({ name: names[part.getAttribute('id')] || '', notes, hasStaff2 });
+    });
+    const title = txt(doc.querySelector('work'), 'work-title') || txt(doc.querySelector('movement-title') && doc.querySelector('movement-title').parentNode, 'movement-title') || '';
+    return { bpm: bpm || 80, title, parts };
+  }
+  function songFromParts(mx, part) {
+    const sel = part === 'all' ? mx.parts : [mx.parts[+part]], out = []; let dropped = 0;
+    sel.forEach((pt) => pt.notes.forEach((n) => {
+      if (n.m < LO || n.m > HI) { dropped++; return; }
+      out.push({ m: n.m, b: Math.round(n.b * 48) / 48, d: Math.min(16, Math.max(1 / 48, Math.round(n.d * 48) / 48)), h: pt.hasStaff2 ? (n.staff >= 2 ? 'L' : 'R') : (n.m >= 60 ? 'R' : 'L') });
+    }));
+    if (!out.length) throw new Error('No notes in the piano range were found in that part.');
+    if (out.length > 2500) throw new Error('That part has ' + out.length + ' notes, more than Keystep keeps in one song (2,500). Pick a single part or a shorter piece.');
+    const b0 = out.reduce((a, n) => Math.min(a, n.b), 1e9); out.forEach((n) => { n.b -= b0; });
+    out.sort((x, y) => x.b - y.b || x.m - y.m);
+    return { bpm: Math.max(30, Math.min(200, Math.round(mx.bpm))), notes: out, by: 'From MusicXML', dropped };
+  }
+  /*XML-END*/
+  $('#xmlFile').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    xml = null; $('#xmlOpts').hidden = true;
+    if (f.size > 8e6) { addMsg('That file is over 8 MB.', 'bad'); return; }
+    try {
+      const text = /\.mxl$/i.test(f.name) ? await unzipMxl(await f.arrayBuffer()) : await f.text();
+      xml = parseMusicXml(text);
+    } catch (err) { addMsg(err.message, 'bad'); return; }
+    const withNotes = xml.parts.map((pt, i) => ({ pt, i })).filter((x) => x.pt.notes.length), total = withNotes.reduce((a, x) => a + x.pt.notes.length, 0);
+    if (!total) { xml = null; addMsg('That file has no notes in it.', 'bad'); return; }
+    $('#xmlPart').innerHTML = '<option value="all">Everything (' + total + ' notes)</option>' + withNotes.map((x) => '<option value="' + x.i + '">' + esc(x.pt.name || ('Part ' + (x.i + 1))) + ' (' + x.pt.notes.length + ' notes)</option>').join('');
+    $('#addTitle').value = (xml.title || f.name.replace(/\.[^.]+$/, '')).slice(0, 60);
+    $('#xmlOpts').hidden = false; addMsg('Found ' + total + ' notes. Choose the part you want, then add the song.');
+  });
+
+  /* Sheet music photo, read by Claude (only where this page can ask Claude) */
+  let SAMPLE = null, LIM = null, photoCtl = null;
+  function barReport(str, label) {
+    const bars = str.split('|').map((x) => x.trim()).filter(Boolean);
+    if (bars.length < 3) return [];
+    const sums = bars.map((b) => +b.split(/\s+/).reduce((t, tok) => t + (tok.split(':')[1] ? parseFloat(tok.split(':')[1]) : 1), 0).toFixed(4));
+    const freq = new Map(); sums.forEach((x) => freq.set(x, (freq.get(x) || 0) + 1));
+    let top = null, topN = 0; freq.forEach((c, v) => { if (c > topN) { topN = c; top = v; } });
+    const out = []; sums.forEach((t, i) => { if (Math.abs(t - top) > 0.01 && i !== 0 && i !== sums.length - 1) out.push(label + ' bar ' + (i + 1) + ' adds up to ' + t + ' beats; most bars have ' + top + '.'); });
+    return out.slice(0, 6);
+  }
+  function photoPrompt(both) {
+    return 'You are reading sheet music from the attached image(s) and transcribing it for a piano practice app. Transcribe ' + (both ? 'both hands: the right hand (treble staff) and the left hand (bass staff)' : 'the right hand only (the top staff / melody)') + '. If there are several images they are consecutive pages in order.\n\n' +
+      'Reply with only one JSON object: {"title": string (the title printed on the page, or ""), "bpm": number (the tempo marking in quarter-note beats per minute, else 80), "rh": string, "lh": string (empty string if not requested), "uncertain": string (a short list of anything you could not read clearly, with bar numbers; empty string if none)}.\n\n' +
+      'Notation for rh and lh: space-separated tokens. A note is a letter, an optional # or b, and an octave number: C4 is middle C, A4 is the A above it. Add :beats for its length where a quarter note is 1 beat (so :2 is a half note, :.5 an eighth, :.25 a sixteenth, :1.5 a dotted quarter, :4 a whole note); no length means 1 beat. R:beats is a rest. Join notes that sound together with +, for example C4+E4+G4:2. Put | between bars. Write nothing else in these strings.\n\n' +
+      'How to read: first find the clef, key signature and time signature of each staff. Treble clef lines are E4 G4 B4 D5 F5 from the bottom; spaces are F4 A4 C5 E5. Bass clef lines are G2 B2 D3 F3 A3; spaces are A2 C3 E3 G3. Count ledger lines carefully, especially for notes above or below the staff, and check each octave. Notes in the same beam group or stacked on one stem are chords. Go bar by bar, left to right, system by system, and do not skip or repeat any bar.\n\nRules: Apply the key signature and any accidentals earlier in the same bar to every affected note and write the # or b explicitly (in G major write F#4 each time F appears). A tied note becomes one note with the combined length. Skip grace notes, ornaments, dynamics, lyrics and chord symbols. Write repeats out in full once, and include first and second endings in order. Count beats from the time signature in quarter notes: a 3/4 bar is 3 beats, a 6/8 bar is 3 beats, a 2/2 bar is 4 beats. Before answering, add up every bar and check it matches the time signature (the first bar may be a shorter pick-up and the last bar may be shorter), and fix mistakes. Never invent notes that are not on the page; if a passage cannot be read, write rests for it and mention it in "uncertain".';
+  }
+  function checkPrompt(both, draft, warns) {
+    return 'You are checking a transcription of sheet music for a piano practice app. The attached image(s) show the page. Below is a draft transcription of it. Compare it with the page bar by bar and correct every mistake: wrong pitches, wrong octaves, missing or extra accidentals (apply the key signature), wrong note lengths, missing or extra notes, rests, chords, and skipped or repeated bars. Keep what is right unchanged.\n\n' +
+      (warns.length ? 'These bars looked wrong when their beats were added up, so look at them first:\n' + warns.join('\n') + '\n\n' : '') +
+      'Draft:\n' + JSON.stringify(draft) + '\n\nReply with only one JSON object in exactly the same form as the draft: {"title", "bpm", "rh", "lh", "uncertain"}. Same notation: space-separated tokens like C4, F#3, Bb4, :beats for length (quarter note = 1 beat, :.5 eighth, :2 half, :4 whole, :1.5 dotted quarter), R:beats for a rest, + to join notes sounding together, | between bars. ' + (both ? '' : 'Only the right hand is wanted, so lh stays an empty string. ') + 'Put anything you still cannot read clearly in "uncertain", with bar numbers.';
+  }
+  function fillFromReading(r, append) {
+    if (!r || typeof r !== 'object' || typeof r.rh !== 'string' || !r.rh.trim()) throw { code: 'invalid_json' };
+    const join = (old, add) => (append && old.trim() && add ? old.trim() + ' | ' + add : add);
+    $('#txtR').value = join($('#txtR').value, r.rh.trim()); $('#txtL').value = join($('#txtL').value, typeof r.lh === 'string' ? r.lh.trim() : '');
+    $('#txtBpm').value = Math.max(30, Math.min(200, Math.round(+r.bpm || 80)));
+    if (r.title && !$('#addTitle').value.trim()) $('#addTitle').value = String(r.title).slice(0, 60);
+    setKind('text');
+    let msg = 'Claude read this from your music. Compare it with the page, fix anything wrong, then press Add song. After adding, "Hear it first" plays it so you can listen for mistakes.';
+    try { parseSeq($('#txtR').value, 'R'); parseSeq($('#txtL').value, 'L'); } catch (err) { msg += '\n' + err.message; }
+    const warns = barReport($('#txtR').value, 'Right hand').concat(barReport($('#txtL').value, 'Left hand'));
+    if (warns.length) msg += '\nBar lengths to check:\n' + warns.join('\n');
+    if (r.uncertain && String(r.uncertain).trim()) msg += '\nClaude was unsure about: ' + String(r.uncertain).trim();
+    addMsg(msg);
+  }
+  const photoError = (e) => ({
+    not_granted: 'Claude was not allowed to read the image. Allow it when asked, then try again.',
+    sampling_disabled: 'Claude is not available for this account.',
+    image_rejected: 'That image could not be used. Try a PNG or JPG under 20 MB.',
+    rate_limited: 'Too many requests right now. Wait a bit and try again.',
+    cancelled: 'Stopped.',
+    invalid_json: 'Claude\'s answer was not in the expected form. Try again, or use a clearer photo.',
+    refused: 'Claude could not read that image. Try another one.'
+  }[e && e.code] || 'Something went wrong while reading the image. Try again.');
+  /* PDF pages become images (pdf.js from cdnjs), because Claude reads images */
+  /*PDF-START*/
+  const isPdf = (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+  function parsePages(str, n) {
+    const set = new Set();
+    String(str || '1').split(',').forEach((part) => {
+      const m = /^\s*(\d+)\s*(?:-\s*(\d+))?\s*$/.exec(part); if (!m) return;
+      let a = +m[1], b = m[2] ? +m[2] : a; if (a > b) [a, b] = [b, a];
+      for (let i = Math.max(1, a); i <= Math.min(n, b); i++) set.add(i);
+    });
+    return [...set].sort((x, y) => x - y);
+  }
+  /*PDF-END*/
+  const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  let pdfjsP = null, pdfCache = null;
+  const loadScript = (src) => new Promise((ok, no) => { const el = document.createElement('script'); el.src = src; el.onload = ok; el.onerror = () => no(new Error('script')); document.head.appendChild(el); });
+  function loadPdfjs() {
+    if (!pdfjsP) {
+      pdfjsP = loadScript(PDFJS + 'pdf.min.js').then(() => loadScript(PDFJS + 'pdf.worker.min.js')).then(() => {
+        if (!window.pdfjsLib) throw new Error('lib');
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; return window.pdfjsLib;
+      }).catch(() => { pdfjsP = null; throw new Error('The PDF reader could not be loaded here. Take a screenshot of the page and choose the image instead.'); });
+    }
+    return pdfjsP;
+  }
+  async function getPdfDoc(file) {
+    if (pdfCache && pdfCache.file === file) return pdfCache.doc;
+    const lib = await loadPdfjs(); let doc;
+    try { doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), disableFontFace: true, isEvalSupported: false, useSystemFonts: false }).promise; }
+    catch (e) { throw new Error(e && e.name === 'PasswordException' ? 'That PDF is password-protected.' : 'That PDF could not be opened. Try a screenshot of the page instead.'); }
+    pdfCache = { file, doc }; return doc;
+  }
+  async function pdfPagesToImages(doc, pages) {
+    const out = [];
+    for (const n of pages) {
+      addMsg('Preparing page ' + n + ' of the PDF…');
+      const page = await doc.getPage(n), v0 = page.getViewport({ scale: 1 }), sc = Math.min(4, 2000 / Math.max(v0.width, v0.height)), vp = page.getViewport({ scale: sc });
+      const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+      await page.render({ canvasContext: x, viewport: vp }).promise;
+      const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+      if (!blob) throw new Error('Could not turn page ' + n + ' into an image.');
+      out.push(blob);
+    }
+    return out;
+  }
+  $('#photoFile').addEventListener('change', async () => {
+    const files = [...$('#photoFile').files], one = files.length === 1 && isPdf(files[0]);
+    $('#pdfRow').hidden = !one; $('#pdfInfo').textContent = ''; if (!one) return;
+    $('#pdfInfo').textContent = 'Opening the PDF…';
+    try { const doc = await getPdfDoc(files[0]); $('#pdfInfo').textContent = 'This PDF has ' + doc.numPages + ' page' + (doc.numPages === 1 ? '' : 's') + '. Pages like 1 or 2-3 work. Each page is read separately, and a second pass checks it.'; }
+    catch (e) { $('#pdfInfo').textContent = e.message; }
+  });
+  $('#photoGo').addEventListener('click', async () => {
+    const files = [...$('#photoFile').files];
+    if (!SAMPLE || !LIM || !LIM.images) return;
+    if (!files.length) { addMsg('Choose a photo, screenshot or PDF of the music first.', 'bad'); return; }
+    if (files.some(isPdf) && files.length > 1) { addMsg('Choose one PDF at a time, or choose images instead.', 'bad'); return; }
+    photoCtl = new AbortController(); $('#photoGo').disabled = true; $('#photoStop').hidden = false; addMsg('Getting the music ready…');
+    try {
+      const both = $('#photoHands').value === 'both', check = $('#photoCheck').checked;
+      let groups; // each group is read on its own, so every page gets Claude's full attention
+      if (files.length === 1 && isPdf(files[0])) {
+        const doc = await getPdfDoc(files[0]), pages = parsePages($('#pdfPages').value, doc.numPages).slice(0, 12);
+        if (!pages.length) throw new Error('That page range is outside the PDF, which has ' + doc.numPages + ' pages.');
+        groups = []; for (const n of pages) groups.push({ label: 'page ' + n, imgs: await pdfPagesToImages(doc, [n]) });
+      } else {
+        groups = files.map((f, k) => ({ label: files.length > 1 ? 'image ' + (k + 1) : 'the image', imgs: [f] }));
+      }
+      const opt = (imgs) => ({ images: imgs, modelTier: 'complex', cache: false, signal: photoCtl.signal });
+      let merged = null, unsure = [];
+      for (const g of groups) {
+        addMsg('Reading ' + g.label + (groups.length > 1 ? ' (of ' + groups.length + ')' : '') + '. This can take a minute or two.');
+        let r = await SAMPLE.json(photoPrompt(both), opt(g.imgs));
+        if (!r || typeof r.rh !== 'string' || !r.rh.trim()) throw { code: 'invalid_json' };
+        const warns = () => barReport(r.rh, 'Right hand').concat(barReport(typeof r.lh === 'string' ? r.lh : '', 'Left hand'));
+        if (check) {
+          addMsg('Checking ' + g.label + ' against the music.');
+          try { const r2 = await SAMPLE.json(checkPrompt(both, r, warns()), opt(g.imgs)); if (r2 && typeof r2.rh === 'string' && r2.rh.trim()) r = r2; }
+          catch (e2) { if (e2 && e2.code === 'cancelled') throw e2; }
+        }
+        if (r.uncertain && String(r.uncertain).trim()) unsure.push((groups.length > 1 ? g.label + ': ' : '') + String(r.uncertain).trim());
+        const lh = typeof r.lh === 'string' ? r.lh.trim() : '';
+        merged = merged ? { title: merged.title, bpm: merged.bpm, rh: merged.rh + ' | ' + r.rh.trim(), lh: merged.lh && lh ? merged.lh + ' | ' + lh : (merged.lh || lh) } : { title: r.title, bpm: r.bpm, rh: r.rh.trim(), lh };
+      }
+      merged.uncertain = unsure.join('\n');
+      fillFromReading(merged, $('#photoAppend').checked);
+    }
+    catch (e) { addMsg(e && e.code ? photoError(e) : (e && e.message) || photoError(e), 'bad'); }
+    finally { $('#photoGo').disabled = false; $('#photoStop').hidden = true; photoCtl = null; }
+  });
+  $('#photoStop').addEventListener('click', () => { if (photoCtl) photoCtl.abort(); });
+  (async () => {
+    try { if (window.claude && window.claude.use) { SAMPLE = await window.claude.use('sample'); if (SAMPLE && SAMPLE.limits) LIM = await SAMPLE.limits().catch(() => null); } } catch (e) {}
+    const ok = !!(SAMPLE && LIM && LIM.images);
+    $('#photoUI').hidden = !ok; $('#photoNA').hidden = ok;
+    $('#photoNA').textContent = 'Reading photos needs the Keystep page inside claude.ai, because that is where Claude can look at an image. Convert the song there, press "Copy these notes" in Type the notes, then paste them into the Right hand box here. Or export MusicXML or MIDI from a notation program and use those tabs.';
+    if (ok) { $('#photoFile').accept = LIM.images.mediaTypes.concat(['application/pdf', '.pdf']).join(','); if (!kindTouched) setKind('photo'); }
+  })();
+
+  /* Pick sheet music from Google Drive (needs the Drive connector, only inside claude.ai) */
+  (async () => {
+    let mcp = null;
+    try { if (window.claude && window.claude.use) mcp = await window.claude.use('mcp'); } catch (e) {}
+    if (!mcp) return;
+    $('#driveWrap').hidden = false;
+    const SRV = 'Google Drive';
+    const note = (t) => { $('#driveNote').textContent = t || ''; };
+    const driveErr = (e) => ({
+      needs_reauth: 'Reconnect Google Drive in claude.ai Settings, then Connectors.',
+      server_not_connected: 'Add the Google Drive connector in claude.ai Settings, then Connectors.',
+      not_in_manifest: 'Google Drive was not allowed for this page.',
+      approval_required: 'Google Drive needs your approval. Press the button again and allow it.',
+      blocked_by_policy: 'Your organization blocks this Google Drive action.',
+      server_unavailable: 'Google Drive did not answer. Try again in a moment.',
+      cancelled: 'Stopped.'
+    }[e && e.code] || 'Could not use Google Drive right now. Try again.');
+    const asJson = (r) => {
+      let v = r && r.payload;
+      if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }
+      if (!v && r && r.content) { for (const b of r.content) { if (b && typeof b.text === 'string') { try { v = JSON.parse(b.text); break; } catch (e) {} } } }
+      return v;
+    };
+    const b64Re = /^[A-Za-z0-9+/_\-=\s]+$/;
+    function findB64(v, out, depth) {
+      if (depth > 6 || v == null) return;
+      if (typeof v === 'string') { if (v.length > 200 && b64Re.test(v)) out.push(v); return; }
+      if (Array.isArray(v)) { v.forEach((x) => findB64(x, out, depth + 1)); return; }
+      if (typeof v === 'object') Object.keys(v).forEach((k) => findB64(v[k], out, depth + 1));
+    }
+    function toFile(res, name, type) {
+      const found = []; findB64(res, found, 0);
+      if (!found.length) return null;
+      found.sort((a, b) => b.length - a.length);
+      let bin;
+      try { bin = atob(found[0].replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/')); } catch (e) { return null; }
+      const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      const head = String.fromCharCode(u[0], u[1], u[2], u[3]);
+      const ok = head === '%PDF' || (u[0] === 0x89 && head.slice(1, 4) === 'PNG') || (u[0] === 0xff && u[1] === 0xd8);
+      if (!ok) return null;
+      return new File([u], name, { type: head === '%PDF' ? 'application/pdf' : (u[0] === 0xff ? 'image/jpeg' : 'image/png') });
+    }
+    let busy = false;
+    async function search() {
+      if (busy) return; busy = true; note('Searching…');
+      const q = $('#driveQ').value.trim().replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const query = "trashed = false and (mimeType = 'application/pdf' or mimeType contains 'image/')" + (q ? " and title contains '" + q + "'" : '');
+      try {
+        const res = await mcp.callTool(SRV, 'search_files', { query, pageSize: 30, excludeContentSnippets: true, orderBy: q ? undefined : 'viewedByMeTime desc' });
+        const data = asJson(res), files = data && Array.isArray(data.files) ? data.files : [];
+        const box = $('#driveList'); box.textContent = '';
+        if (!files.length) { box.textContent = 'No PDFs or images found.'; note(''); return; }
+        files.forEach((f) => {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.style.cssText = 'display:block;width:100%;text-align:left;margin:4px 0;overflow-wrap:anywhere';
+          b.textContent = (f.title || 'Untitled') + (f.fileSize ? '  (' + (f.fileSize / 1048576 < 1 ? Math.max(1, Math.round(f.fileSize / 1024)) + ' KB' : (f.fileSize / 1048576).toFixed(1) + ' MB') + ')' : '');
+          b.setAttribute('role', 'listitem');
+          b.addEventListener('click', () => pick(f));
+          box.appendChild(b);
+        });
+        note(files.length + ' found. Choose one.');
+      } catch (e) { note(driveErr(e)); }
+      finally { busy = false; }
+    }
+    async function pick(f) {
+      if (busy) return;
+      if (+f.fileSize > 15 * 1048576) { note('That file is too large (over 15 MB).'); return; }
+      busy = true; note('Getting “' + (f.title || 'file') + '” from Drive…');
+      try {
+        const res = await mcp.callTool(SRV, 'download_file_content', { fileId: f.id });
+        const file = toFile(res, f.title || 'music.pdf');
+        if (!file) { note('Could not read that file from Drive. Download it and choose it with the file button instead.'); return; }
+        const dt = new DataTransfer(); dt.items.add(file);
+        $('#photoFile').files = dt.files; $('#photoFile').dispatchEvent(new Event('change'));
+        if (!$('#addTitle').value.trim()) $('#addTitle').value = (f.title || '').replace(/\.[^.]+$/, '').slice(0, 60);
+        $('#drivePick').hidden = true; note('Loaded “' + (f.title || 'file') + '”. Press Read the music.');
+      } catch (e) { note(driveErr(e)); }
+      finally { busy = false; }
+    }
+    $('#driveBtn').addEventListener('click', () => { const open = $('#drivePick').hidden; $('#drivePick').hidden = !open; if (open) { $('#driveQ').focus(); if (!$('#driveList').children.length) search(); } });
+    $('#driveSearch').addEventListener('click', search);
+    $('#driveQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
+  })();
+
+  /* Move a song between copies of Keystep */
+  $('#copyNotes').addEventListener('click', async () => {
+    const t = '#title ' + $('#addTitle').value.trim() + '\n#bpm ' + $('#txtBpm').value + '\n#rh ' + $('#txtR').value.replace(/\s*\n\s*/g, ' ').trim() + '\n#lh ' + $('#txtL').value.replace(/\s*\n\s*/g, ' ').trim();
+    try { await navigator.clipboard.writeText(t); addMsg('Copied. Paste it into the Right hand box of another copy of Keystep.'); }
+    catch (e) { addMsg('This view would not let the page copy. Select the notes in the boxes and copy them by hand.', 'bad'); }
+  });
+  $('#txtR').addEventListener('input', () => {
+    const v = $('#txtR').value; if (!/^#rh /m.test(v)) return;
+    const get = (k) => { const m = new RegExp('^#' + k + ' ?(.*)$', 'm').exec(v); return m ? m[1].trim() : ''; };
+    $('#txtR').value = get('rh'); $('#txtL').value = get('lh'); const b = parseFloat(get('bpm')); if (b) $('#txtBpm').value = b;
+    if (get('title') && !$('#addTitle').value.trim()) $('#addTitle').value = get('title');
+    addMsg('Song pasted. Check it, then press Add song.');
+  });
+
+  /* ---------- Progress ---------- */
+  function renderProgress() {
+    const r = store.read, acc = r.total ? Math.round(100 * r.right / r.total) + '%' : '–';
+    const rows = SONGS.map((s) => { const b = store.songs[s.id]; return '<li><span>' + esc(s.title) + '</span><span>' + (b ? 'best ' + b.best + '% · ' + b.plays + (b.plays === 1 ? ' run' : ' runs') : 'not played yet') + '</span></li>'; }).join('');
+    $('#v-progress').innerHTML =
+      '<h2>Your progress</h2>' +
+      '<div class="tiles"><div class="tile"><b>' + r.total + '</b><span>Notes read</span></div><div class="tile"><b>' + acc + '</b><span>First-try accuracy</span></div><div class="tile"><b>' + r.best + '</b><span>Best streak</span></div></div>' +
+      '<ul class="plist">' + rows + '</ul>' +
+      '<p class="sub">Saved in this browser only. A different device or a cleared browser starts fresh.</p>' +
+      '<div class="row" id="resetRow"><button class="btn" id="resetAsk">Reset progress</button></div>';
+    $('#resetAsk').addEventListener('click', () => {
+      $('#resetRow').innerHTML = '<span class="sub">Erase all saved progress?</span><button class="btn" id="resetYes">Yes, erase</button><button class="btn" id="resetNo">Cancel</button>';
+      $('#resetYes').addEventListener('click', () => { const keep = store.custom; store = fresh(); store.custom = keep; R.streak = 0; save(); renderProgress(); renderSongSel(); });
+      $('#resetNo').addEventListener('click', renderProgress);
+    });
+  }
+
+  /* ---------- start up ---------- */
+  readColors();
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors); } catch (e) {}
+  new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  window.addEventListener('resize', layout);
+  refreshSongs(); syncSettings(); layout(); renderSongSel(); loadSong('twinkle'); renderSongSel(); updateStats();
+  let last = performance.now();
+  function frame(ts) {
+    const dt = Math.min(0.1, (ts - last) / 1000); last = ts;
+    micTick(); gameTick(dt); draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+<script>if('serviceWorker' in navigator&&location.protocol.startsWith('http')){navigator.serviceWorker.register('sw.js').catch(function(){});}</script></body></html>
