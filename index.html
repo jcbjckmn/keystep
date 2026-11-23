@@ -4,7 +4,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Keystep">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#0a1622">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
@@ -13,44 +13,46 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
 <style>
 /* Layout: header, microphone bar, tabs, one working panel, then the stage: falling tiles above a full 88-key keyboard drawn on one canvas. */
+/* Sky blue and warm yellow. Right hand is blue, left hand is yellow, and the key to press next glows yellow. */
 :root {
-  --bg: #edf0f3; --surface: #ffffff; --fg: #151a21; --muted: #576170; --line: #d3d9e0;
-  --accent: #0e6b5c; --accent-ink: #ffffff;
-  --hint: #f2b230; --hint-ink: #2b1d00; --good: #1a8a4b; --bad: #c23a30;
-  --frame: #232a33; --key-w: #fbfcfd; --key-edge: #aab3be; --key-b: #181c22; --key-ink: #46505d;
-  --stage: #dfe5ec; --lane: #b9c3cf; --tile-r: #0e8f78; --tile-l: #5b5bd6;
+  --bg: #f1f8fd; --surface: #ffffff; --fg: #0f2233; --muted: #506579; --line: #d6e6f2;
+  --accent: #0b78c2; --accent-ink: #ffffff; --accent-soft: #e2f1fb;
+  --hint: #ffc928; --hint-ink: #3a2a00; --good: #1b8a4c; --bad: #c9362c;
+  --frame: #123049; --key-w: #ffffff; --key-edge: #a9bccb; --key-b: #17202b; --key-ink: #3f566b;
+  --stage: #e3f2fd; --lane: #b7d6ec; --tile-r: #3aaff0; --tile-l: #f7c11f; --tile-ink: #07263b;
   --font-display: "Space Grotesk", system-ui, sans-serif;
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e1217; --surface: #171d25; --fg: #e7ebf0; --muted: #98a4b3; --line: #2a333e;
-    --accent: #3cc4a6; --accent-ink: #04231c;
-    --hint: #f2b230; --hint-ink: #2b1d00; --good: #4cc880; --bad: #ff7b6f;
-    --frame: #07090c; --key-w: #e8ecf0; --key-edge: #69737f; --key-b: #1d242d; --key-ink: #46505d;
-    --stage: #0f151c; --lane: #27313d; --tile-r: #3cc4a6; --tile-l: #8c8cff;
+    --bg: #0a1622; --surface: #10202f; --fg: #e8f3fb; --muted: #9bb2c6; --line: #1f3548;
+    --accent: #55c2f7; --accent-ink: #04202f; --accent-soft: #14293a;
+    --hint: #ffd34a; --hint-ink: #3a2a00; --good: #4cc880; --bad: #ff7b6f;
+    --frame: #050d14; --key-w: #eef5fa; --key-edge: #6f8294; --key-b: #16212c; --key-ink: #3f566b;
+    --stage: #0c1a28; --lane: #1f3a50; --tile-r: #55c2f7; --tile-l: #ffd34a; --tile-ink: #04202f;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0e1217; --surface: #171d25; --fg: #e7ebf0; --muted: #98a4b3; --line: #2a333e;
-  --accent: #3cc4a6; --accent-ink: #04231c;
-  --hint: #f2b230; --hint-ink: #2b1d00; --good: #4cc880; --bad: #ff7b6f;
-  --frame: #07090c; --key-w: #e8ecf0; --key-edge: #69737f; --key-b: #1d242d; --key-ink: #46505d;
-  --stage: #0f151c; --lane: #27313d; --tile-r: #3cc4a6; --tile-l: #8c8cff;
+  --bg: #0a1622; --surface: #10202f; --fg: #e8f3fb; --muted: #9bb2c6; --line: #1f3548;
+  --accent: #55c2f7; --accent-ink: #04202f; --accent-soft: #14293a;
+  --hint: #ffd34a; --hint-ink: #3a2a00; --good: #4cc880; --bad: #ff7b6f;
+  --frame: #050d14; --key-w: #eef5fa; --key-edge: #6f8294; --key-b: #16212c; --key-ink: #3f566b;
+  --stage: #0c1a28; --lane: #1f3a50; --tile-r: #55c2f7; --tile-l: #ffd34a; --tile-ink: #04202f;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body {
   margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body);
-  padding-block: 20px 40px;
+  padding-block: 12px 24px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-.app { max-width: 1100px; margin: 0 auto; display: grid; gap: 14px; }
+.app { max-width: 1100px; margin: 0 auto; display: grid; gap: 10px; }
 h1, h2 { font-family: var(--font-display); margin: 0; line-height: 1.15; text-wrap: balance; }
-h1 { font-size: 26px; letter-spacing: -0.01em; }
+h1 { font-size: 24px; letter-spacing: -0.01em; }
+h1::before { content: ''; display: inline-block; width: 12px; height: 12px; border-radius: 4px; background: var(--hint); box-shadow: 8px 0 0 -2px var(--accent); margin-right: 18px; }
 h2 { font-size: 18px; }
 p { margin: 0; }
 button, select, input { font: inherit; color: inherit; }
@@ -58,40 +60,41 @@ button, select, input { font: inherit; color: inherit; }
 .sub { color: var(--muted); font-size: 14px; }
 .top { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 
-.mic { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; }
+.mic { background: var(--surface); border-radius: 16px; padding: 10px 14px; display: grid; gap: 6px; box-shadow: 0 1px 2px rgba(15,34,51,.06); }
 .microw { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
 .meter { width: 120px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .meter i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.06s linear; }
 .micstat { flex: 1 1 240px; min-width: 0; font-size: 14px; color: var(--muted); }
 .micstat.on { color: var(--fg); }
 .micstat.err { color: var(--bad); }
-.mset summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+.mset summary { cursor: pointer; font-size: 14px; color: var(--muted); padding: 4px 0; }
 .mset .grid { display: flex; flex-wrap: wrap; gap: 10px 22px; padding-top: 10px; }
 
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; }
+.tabs { display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; }
 .tab {
-  background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap;
-  padding: 10px 14px; font: 600 15px var(--font-display); color: var(--muted); cursor: pointer;
+  background: none; border: 0; border-radius: 999px; white-space: nowrap;
+  padding: 10px 16px; min-height: 44px; font: 600 15px var(--font-display); color: var(--muted); cursor: pointer;
 }
 .tab:hover { color: var(--fg); }
-.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.tab[aria-selected="true"] { color: var(--accent-ink); background: var(--accent); }
 
-.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
-.panel section { display: grid; gap: 14px; align-content: start; }
+.panel { background: var(--surface); border-radius: 16px; padding: 12px 16px; box-shadow: 0 1px 2px rgba(15,34,51,.06); }
+.panel section { display: grid; gap: 10px; align-content: start; }
 .row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
-.btn { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; font-weight: 600; font-size: 14px; cursor: pointer; }
-.btn:hover { border-color: var(--muted); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.inl { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
+.btn { background: var(--accent-soft); border: 0; border-radius: 10px; padding: 10px 16px; min-height: 44px; font-weight: 600; font-size: 15px; color: var(--accent); cursor: pointer; }
+.btn:hover { filter: brightness(0.96); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.inl { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); font-size: 15px; }
 .inl input[type=range] { accent-color: var(--accent); width: 110px; }
 .inl output { min-width: 2.4ch; font-variant-numeric: tabular-nums; }
-select { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
-.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg label { padding: 6px 12px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--muted); }
+select { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-height: 40px; max-width: 100%; color: var(--fg); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg label { padding: 10px 14px; font-size: 15px; font-weight: 600; cursor: pointer; color: var(--muted); }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
 .seg label:has(input:checked) { background: var(--accent); color: var(--accent-ink); }
 .seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
 .feed { min-height: 1.5em; font-weight: 500; white-space: pre-line; }
+#gStatus:empty { display: none; }
 .feed.good { color: var(--good); }
 .feed.bad { color: var(--bad); }
 .score { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
@@ -117,7 +120,7 @@ select { background: var(--surface); border: 1px solid var(--line); border-radiu
 .plist li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .plist li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 
-.addp { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 12px; }
+.addp { background: var(--bg); border-radius: 12px; padding: 14px; display: grid; gap: 12px; }
 .stack { display: grid; gap: 12px; }
 .fld { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
 .fld input[type=text], .fld input[type=number], .fld textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--fg); width: 100%; }
@@ -125,26 +128,26 @@ select { background: var(--surface); border: 1px solid var(--line); border-radiu
 .inl input[type=text] { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; color: var(--fg); width: 90px; }
 .fld textarea { min-height: 76px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical; }
 input[type=file] { max-width: 100%; font-size: 14px; }
-.scroll { overflow-x: auto; border-radius: 12px; background: var(--frame); }
+.scroll { overflow-x: auto; border-radius: 16px; background: var(--frame); }
 #cv { display: block; touch-action: pan-x; user-select: none; -webkit-user-select: none; }
 .help { color: var(--muted); font-size: 13px; }
 @media (hover: none) { .help.kbd { display: none; } }
-@media (max-width: 480px) { .panel { padding: 14px; } .big { font-size: 42px; } .tab { padding: 10px 10px; } }
+@media (max-width: 480px) { .panel { padding: 14px; } .big { font-size: 42px; } .tab { padding: 10px 12px; } .sub { font-size: 13px; } }
 </style>
 
 <div class="app">
-  <header class="top"><h1>Keystep</h1><p class="sub">Free piano practice that listens to your piano</p></header>
+  <header class="top"><h1>Keystep</h1><p class="sub">Piano practice that listens</p></header>
 
   <section class="mic" aria-label="Microphone">
     <div class="microw">
       <button class="btn primary" id="micBtn">Use my piano (microphone)</button>
-      <button class="btn" id="calBtn" type="button" title="Stay quiet for a moment so Keystep can learn the fan or airflow noise">Re-learn room noise</button>
       <div class="meter" aria-hidden="true"><i id="meter"></i></div>
       <p class="micstat" id="micStat" aria-live="polite">Microphone is off. You can still play with the on-screen keys or your computer keyboard.</p>
     </div>
     <details class="mset">
       <summary>Microphone settings</summary>
       <div class="grid">
+        <button class="btn" id="calBtn" type="button" title="Stay quiet for a moment so Keystep can learn the fan or airflow noise">Re-learn room noise</button>
         <label class="inl">Sensitivity <input type="range" id="sens" min="1" max="10" value="5"> <output id="sensOut">5</output></label>
         <label class="chk"><input type="checkbox" id="single"> One note at a time (only the loudest note counts; for melodies, not chords)</label>
         <label class="chk"><input type="checkbox" id="strictWrong"> Count extra heard notes as wrong in songs (off: only the song's notes count, so chords work)</label>
@@ -168,6 +171,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
       <div class="row">
         <label class="inl">Song <select id="songSel"></select></label>
         <label class="inl">Hands <select id="handsSel"><option value="both">Both hands</option><option value="R">Right hand only</option><option value="L">Left hand only</option></select></label>
+        <label class="inl">Keys <select id="zoomSel"><option value="full">Whole keyboard</option><option value="song">Zoom to the song</option></select></label>
         <div class="seg" role="radiogroup" aria-label="Play style">
           <label><input type="radio" name="gmode" value="wait" checked> Wait for me</label>
           <label><input type="radio" name="gmode" value="time"> Keep time</label>
@@ -424,14 +428,22 @@ input[type=file] { max-width: 100%; font-size: 14px; }
   const whites = [], wIdx = {};
   for (let m = LO; m <= HI; m++) if (!isBlack(m)) { wIdx[m] = whites.length; whites.push(m); }
   let ww = 14, kbH = 110, tH = 0, W = 0, H = 0;
+  const zoomMode = () => store.zoom === 'full' || store.zoom === 'song' ? store.zoom : (scrollEl.clientWidth < 820 ? 'song' : 'full');
   const C = {};
   function readColors() {
     const cs = getComputedStyle(document.documentElement);
-    ['stage','lane','tile-r','tile-l','key-w','key-edge','key-b','frame','accent','hint','good','bad','key-ink','fg','hint-ink'].forEach((n) => { C[n] = cs.getPropertyValue('--' + n).trim(); });
+    ['stage','lane','tile-r','tile-l','key-w','key-edge','key-b','frame','accent','hint','good','bad','key-ink','fg','hint-ink','tile-ink'].forEach((n) => { C[n] = cs.getPropertyValue('--' + n).trim(); });
   }
   function layout() {
     const boxW = Math.max(280, scrollEl.clientWidth);
     ww = Math.max(boxW / whites.length, 13);
+    /* Zoom to the song: make the keys as wide as the song's range allows, and scroll the rest out of view */
+    if (mode === 'songs' && zoomMode() === 'song' && G.notes && G.notes.length) {
+      let lo = 200, hi = 0; G.notes.forEach((n) => { if (n.m < lo) lo = n.m; if (n.m > hi) hi = n.m; });
+      const wi = (m) => (isBlack(m) ? wIdx[m - 1] : wIdx[m]);
+      const count = Math.max(12, wi(hi) - wi(lo) + 1 + 4);
+      ww = Math.min(64, Math.max(ww, boxW / count));
+    }
     W = Math.round(ww * whites.length);
     kbH = Math.round(Math.min(150, Math.max(96, ww * 7.2)));
     tH = mode === 'songs' ? Math.round(Math.min(440, Math.max(240, window.innerHeight * 0.48))) : 0;
@@ -464,7 +476,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
       for (let m = LO; m <= HI; m++) if (m % 12 === 0) g.fillRect(wIdx[m] * ww, 0, 1, tH);
       if (G.song) {
         const pps = tH / 3.2;
-        g.font = '600 11px Inter, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        const tfs = Math.round(Math.max(11, Math.min(20, ww * 0.62))); g.font = '700 ' + tfs + 'px Inter, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
         G.notes.forEach((n) => {
           const yb = tH - (n.start - G.t) * pps, yt = yb - Math.max(n.dur * pps, 12);
           if (n.st === 'hit' && G.t >= n.start && G.t <= n.start + n.dur) activeSet.add(n.m);
@@ -475,11 +487,11 @@ input[type=file] { max-width: 100%; font-size: 14px; }
           g.globalAlpha = n.st === 'miss' ? 0.4 : 1;
           g.fillStyle = n.st === 'hit' ? C.good : n.st === 'miss' ? C.bad : (n.h === 'L' ? C['tile-l'] : C['tile-r']);
           rr(x, top, w, bot - top, 4); g.fill(); g.globalAlpha = 1;
-          if (w >= 13 && bot - top >= 14) { g.fillStyle = '#0b1218'; g.fillText(pc(n.m), x + w / 2, bot - 8); }
+          if (w >= tfs * 0.55 && bot - top >= tfs + 4 && n.st !== 'miss') { g.fillStyle = n.st === 'hit' ? '#ffffff' : C['tile-ink']; g.fillText(pc(n.m), x + w / 2, bot - tfs * 0.7); }
         });
         if (G.mode === 'time' && !G.demo && G.state === 'running' && G.t < 0) {
           g.fillStyle = C.fg; g.font = '700 64px "Space Grotesk", system-ui, sans-serif'; g.textBaseline = 'middle';
-          g.fillText(String(Math.ceil(-G.t)), W / 2 + (scrollEl.scrollLeft - 0) * 0, tH / 2);
+          g.fillText(String(Math.ceil(-G.t)), scrollEl.scrollLeft + scrollEl.clientWidth / 2, tH / 2);
         }
       }
       g.fillStyle = C.frame; g.fillRect(0, tH - 3, W, 3);
@@ -496,11 +508,13 @@ input[type=file] { max-width: 100%; font-size: 14px; }
       const x = wIdx[m] * ww;
       g.fillStyle = fill(m, false); rrb(x + 0.5, tH, ww - 1, kbH - 1, 3); g.fill();
       g.strokeStyle = C['key-edge']; g.lineWidth = 1; g.stroke();
-      if (m % 12 === 0) { g.fillStyle = C['key-ink']; g.fillText(nameOf(m), x + ww / 2, tH + kbH - 7); }
+      if (hintSet.has(m)) { g.font = '700 ' + Math.round(Math.max(10, Math.min(18, ww * 0.55))) + 'px Inter, system-ui, sans-serif'; g.fillStyle = C['hint-ink']; g.fillText(pc(m), x + ww / 2, tH + kbH - 9); g.font = '600 9px Inter, system-ui, sans-serif'; }
+      else if (m % 12 === 0) { g.fillStyle = C['key-ink']; g.fillText(nameOf(m), x + ww / 2, tH + kbH - 7); }
     });
     for (let m = LO; m <= HI; m++) if (isBlack(m)) {
       g.fillStyle = fill(m, true); rrb(keyX(m), tH, keyW(m), kbH * 0.62, 2); g.fill();
       g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke();
+      if (hintSet.has(m)) { g.font = '700 ' + Math.round(Math.max(9, Math.min(15, ww * 0.42))) + 'px Inter, system-ui, sans-serif'; g.fillStyle = C['hint-ink']; g.textBaseline = 'alphabetic'; g.fillText(pc(m), keyX(m) + keyW(m) / 2, tH + kbH * 0.62 - 7); g.font = '600 9px Inter, system-ui, sans-serif'; }
     }
   }
 
@@ -805,9 +819,13 @@ input[type=file] { max-width: 100%; font-size: 14px; }
     $('#handsSel').value = store.hands === 'R' || store.hands === 'L' ? store.hands : 'both';
     compile(); resetGame();
     if (G.handsFellBack) gStatus('This song only has one hand written, so all of it is shown.');
+    $('#zoomSel').value = zoomMode();
+    layout(); centerOnSong();
+  }
+  function centerOnSong() {
     const ms = G.notes.map((n) => n.m), c = (Math.min(...ms) + Math.max(...ms)) / 2;
     const mid = isBlack(Math.round(c)) ? Math.round(c) - 1 : Math.round(c);
-    scrollEl.scrollLeft = keyX(mid) - scrollEl.clientWidth / 2;
+    scrollEl.scrollLeft = keyX(mid) + ww / 2 - scrollEl.clientWidth / 2;
   }
   const curGroup = () => { while (G.gi < G.groups.length && G.groups[G.gi].idx.every((i) => G.notes[i].st !== 'pending')) G.gi++; return G.groups[G.gi] || null; };
   function gameHints() {
@@ -879,7 +897,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
     audio();
     if (G.demo) resetGame();
     if (G.state === 'running') pauseGame();
-    else { if (G.state === 'done') resetGame(); G.state = 'running'; updateBtns(); gStatus(''); }
+    else { if (G.state === 'done') resetGame(); G.state = 'running'; updateBtns(); gStatus(''); try { scrollEl.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch (e) {} }
   });
   $('#gRestart').addEventListener('click', resetGame);
   $('#gDemo').addEventListener('click', () => {
@@ -887,6 +905,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
     resetGame(); audio(); G.demo = true; G.t = -1; G.state = 'running'; updateBtns(); gStatus('Listening to the song. Watch where the tiles land.');
   });
   $('#songSel').addEventListener('change', (e) => loadSong(e.target.value));
+  $('#zoomSel').addEventListener('change', (e) => { store.zoom = e.target.value; save(); layout(); if (G.song) centerOnSong(); });
   $('#handsSel').addEventListener('change', (e) => { store.hands = e.target.value; save(); if (G.song) loadSong(G.song.id); });
   document.querySelectorAll('input[name=gmode]').forEach((r) => r.addEventListener('change', resetGame));
   $('#tempo').addEventListener('input', (e) => { G.bpm = +e.target.value; $('#tempoOut').textContent = G.bpm; compile(); resetGame(); });
