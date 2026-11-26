@@ -391,10 +391,15 @@ input[type=file] { max-width: 100%; font-size: 14px; }
   function octaveLow(res, m, tg, thr) {
     if (m - 12 < 21) return false;
     const lo = m - 12;
-    if (!tg.has(lo)) {
-      if (res.a[lo] >= thr - 6 && res.a[lo] >= res.a[m] - 8 && res.a[lo] >= res.a[lo - 2] + 3 && res.a[lo] >= res.a[lo + 2] + 3) return true;
-      if (m + 7 <= 108 && !tg.has(m + 7) && res.a[m + 7] >= thr - 2 && res.a[m + 7] >= res.a[m] - 8 && res.a[m + 7] > res.a[m + 19] + 4) return true;
-    }
+    if (tg.has(lo)) return false;
+    const a = res.a;
+    /* 1) the lower note's own fundamental stands out AND its 3rd partial (which the target does not have) is there too.
+       The lower string alone ringing in sympathy is not enough, so both must show. */
+    const loPeak = a[lo] >= thr - 6 && a[lo] >= a[m] - 10 && a[lo] >= a[lo - 2] + 3 && a[lo] >= a[lo + 2] + 3;
+    const has3 = m + 7 > 108 || tg.has(m + 7) || (a[m + 7] >= thr - 8 && a[m + 7] >= a[lo] - 14);
+    if (loPeak && (has3 || m > 101)) return true;
+    /* 2) the lower note's fundamental is faint but its 3rd partial is clearly there and the target's own 3rd partial is not */
+    if (m + 7 <= 108 && !tg.has(m + 7) && a[m + 7] >= thr - 8 && a[m + 7] >= a[m] - 12 && (m + 19 > 108 || a[m + 7] > a[m + 19] + 2)) return true;
     return false;
   }
   function isExplained(res, present, c) {
@@ -679,7 +684,13 @@ input[type=file] { max-width: 100%; font-size: 14px; }
         const cand = tg.size >= 2 ? [...new Set([...strikes2, ...strikes3])] : strikes2;
         cand.filter((m) => tg.has(m) && !isExplained(res, others, m) && !octaveLow(res, m, tg, thr)).forEach((m) => gameStrike(m, true));
       }
-      if (now - (MIC.textAt || 0) > 120) { MIC.textAt = now; micStat(muted ? 'Listening…' : (tg.size ? 'Listening for ' + [...tg].sort((x, y) => x - y).map(nameOf).join(' + ') : 'Listening. Press Start, then play.'), 'on'); }
+      if (now - (MIC.textAt || 0) > 120) {
+        MIC.textAt = now;
+        /* show the loudest pitch the microphone hears, so a wrong-octave problem is easy to see */
+        let hm = -1, hv = -99; for (let m = LO; m <= HI; m++) if (res.a[m] > hv && chordPresent(res, m, thr)) { hv = res.a[m]; hm = m; }
+        const hear = hm > 0 && !muted ? '  ·  hearing ' + nameOf(hm) : '';
+        micStat(muted ? 'Listening…' : (tg.size ? 'Listening for ' + [...tg].sort((x, y) => x - y).map(nameOf).join(' + ') + hear : 'Listening. Press Start, then play.'), 'on');
+      }
       return;
     }
     let keep = [...present].filter((m) => !isExplained(res, present, m));
