@@ -376,6 +376,17 @@ input[type=file] { max-width: 100%; font-size: 14px; }
     if (typeof MIC !== 'undefined' && MIC.noise && a + res.fl < MIC.noise[m] + 8) return false;
     return res.a[m + 19] >= thr - 4 && res.a[m + 12] >= thr - 4 && res.a[m + 7] < res.a[m + 19] - 6;
   }
+  /* chords: several notes at once share the microphone's loudness, so each one is quieter and neighbouring notes blur the peak.
+     When the song is waiting for 2+ notes together, each of them is checked with this gentler test. */
+  function chordPresent(res, m, thr) {
+    const a = res.a[m], s = res.sup[m];
+    if (a < thr - 8 || a < res.max - 34) return false;
+    if (m > 22 && m < 107 && a - Math.min(res.a[m - 2], res.a[m + 2]) < 3) return false;
+    if (typeof MIC !== 'undefined' && MIC.noise && a + res.fl < MIC.noise[m] + 8) return false;
+    if (m > 21 && a < res.a[m - 1] - 1) return false;
+    if (m < 108 && a < res.a[m + 1] - 1) return false;
+    return m >= 84 || s >= thr - 14;
+  }
   /* true when what was heard is really the note an octave lower, with the target only ringing as its overtone */
   function octaveLow(res, m, tg, thr) {
     if (m - 12 < 21) return false;
@@ -632,7 +643,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
     const level = 20 * Math.log10(Math.sqrt(s / n) + 1e-9);
     $('#meter').style.width = Math.max(0, Math.min(100, (level + 60) * 2)) + '%';
     MIC.an.getFloatFrequencyData(MIC.db);
-    const res = MIC.det.analyze(MIC.db), thr = MIC.thr, present = new Set(), strikes = [], strikes2 = [];
+    const res = MIC.det.analyze(MIC.db), thr = MIC.thr, present = new Set(), strikes = [], strikes2 = [], strikes3 = [];
     if (now < MIC.calUntil) {
       for (let m = 21; m <= 108; m++) { const v = res.a[m] + res.fl; if (v > MIC.noise[m]) MIC.noise[m] = v; }
       heard = new Set(); micStat('Learning the room noise. Stay quiet for a moment…', 'on'); return;
@@ -648,6 +659,9 @@ input[type=file] { max-width: 100%; font-size: 14px; }
       if (pres && a - lo >= RISE && now - MIC.last[m] > COOL) { strikes.push(m); MIC.last[m] = now; }
       /* looser test used only for notes the song is waiting for: we know what to listen for, so it can be less strict */
       MIC.tc[m] = (isPresent(res, m, thr - 4) || weakFund(res, m, thr)) ? MIC.tc[m] + 1 : 0;
+      MIC.tl = MIC.tl || new Int16Array(128); MIC.last3 = MIC.last3 || new Float64Array(128);
+      MIC.tl[m] = chordPresent(res, m, thr) ? MIC.tl[m] + 1 : 0;
+      if (MIC.tl[m] >= 2 && a - lo >= RISE - 2 && now - MIC.last3[m] > COOL) { strikes3.push(m); MIC.last3[m] = now; }
       if (MIC.tc[m] >= 3 && a - lo >= RISE - 1 && now - MIC.last2[m] > COOL) { strikes2.push(m); MIC.last2[m] = now; }
     }
     MIC.hp = (MIC.hp + 1) % HN;
@@ -662,7 +676,8 @@ input[type=file] { max-width: 100%; font-size: 14px; }
       heard = new Set();
       if (!muted && tg.size) {
         const others = new Set([...present].filter((x) => !tg.has(x)));
-        strikes2.filter((m) => tg.has(m) && !isExplained(res, others, m) && !octaveLow(res, m, tg, thr)).forEach((m) => gameStrike(m, true));
+        const cand = tg.size >= 2 ? [...new Set([...strikes2, ...strikes3])] : strikes2;
+        cand.filter((m) => tg.has(m) && !isExplained(res, others, m) && !octaveLow(res, m, tg, thr)).forEach((m) => gameStrike(m, true));
       }
       if (now - (MIC.textAt || 0) > 120) { MIC.textAt = now; micStat(muted ? 'Listening…' : (tg.size ? 'Listening for ' + [...tg].sort((x, y) => x - y).map(nameOf).join(' + ') : 'Listening. Press Start, then play.'), 'on'); }
       return;
