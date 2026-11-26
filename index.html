@@ -683,6 +683,12 @@ input[type=file] { max-width: 100%; font-size: 14px; }
         const others = new Set([...present].filter((x) => !tg.has(x)));
         const cand = tg.size >= 2 ? [...new Set([...strikes2, ...strikes3])] : strikes2;
         cand.filter((m) => tg.has(m) && !isExplained(res, others, m) && !octaveLow(res, m, tg, thr)).forEach((m) => gameStrike(m, true));
+        /* octave pairs (C4 + C5 together): the upper note is already ringing as the lower note's overtone, so it never "rises" when both are
+           struck. Accept the upper note when it is clearly sounding at least as strongly as the lower one's fundamental. */
+        MIC.lastP = MIC.lastP || new Float64Array(128);
+        [...tg].filter((m) => tg.has(m - 12) && !cand.includes(m)).forEach((m) => {
+          if (MIC.tl[m] >= 2 && res.a[m - 12] >= thr - 8 && res.a[m] >= res.a[m - 12] - 4 && now - MIC.lastP[m] > COOL) { MIC.lastP[m] = now; gameStrike(m, true); }
+        });
       }
       if (now - (MIC.textAt || 0) > 120) {
         MIC.textAt = now;
