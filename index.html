@@ -680,6 +680,11 @@ input[type=file] { max-width: 100%; font-size: 14px; }
       MIC.tc[m] = (isPresent(res, m, thr - 4) || weakFund(res, m, thr)) ? MIC.tc[m] + 1 : 0;
       MIC.tl = MIC.tl || new Int16Array(128); MIC.last3 = MIC.last3 || new Float64Array(128);
       MIC.tl[m] = chordPresent(res, m, thr) ? MIC.tl[m] + 1 : 0;
+      /* when did this pitch start sounding? (used to accept a note that appears right after the song asks for it, even if it never 'rises') */
+      MIC.since = MIC.since || new Float64Array(128); MIC.pr = MIC.pr || new Uint8Array(128);
+      const prNow = MIC.tc[m] > 0 || MIC.tl[m] > 0 ? 1 : 0;
+      if (prNow && !MIC.pr[m]) MIC.since[m] = now;
+      MIC.pr[m] = prNow;
       if (MIC.tl[m] >= 2 && a - lo >= RISE - 2 && now - MIC.last3[m] > COOL) { strikes3.push(m); MIC.last3[m] = now; }
       if (MIC.tc[m] >= (m >= 84 ? 2 : 3) && a - lo >= RISE - (m >= 84 ? 2 : 1) && now - MIC.last2[m] > COOL) { strikes2.push(m); MIC.last2[m] = now; }
     }
@@ -695,8 +700,21 @@ input[type=file] { max-width: 100%; font-size: 14px; }
       heard = new Set();
       if (!muted && tg.size) {
         const others = new Set([...present].filter((x) => !tg.has(x)));
+        /* when each note was first asked for */
+        MIC.pendAt = MIC.pendAt || new Float64Array(128); MIC.ptg = MIC.ptg || new Set(); MIC.lastS = MIC.lastS || new Float64Array(128);
+        tg.forEach((m) => { if (!MIC.ptg.has(m)) MIC.pendAt[m] = now; });
+        MIC.ptg = new Set(tg);
         const cand = tg.size >= 2 ? [...new Set([...strikes2, ...strikes3])] : strikes2;
         cand.filter((m) => tg.has(m) && !isExplained(res, others, m) && !octaveLow(res, m, tg, thr)).forEach((m) => gameStrike(m, true));
+        /* quick passages and chords: a note that began sounding right after the song asked for it, and is steady, counts even when
+           it did not rise much (the previous note or the other chord notes were still ringing, which hides the jump) */
+        [...tg].forEach((m) => {
+          if (cand.includes(m) || !(MIC.tl[m] >= 3 || MIC.tc[m] >= 3) || now - MIC.lastS[m] <= 350) return;
+          if (MIC.since[m] < MIC.pendAt[m] - 90) return;
+          if (isExplained(res, others, m) || octaveLow(res, m, tg, thr)) return;
+          MIC.lastS[m] = now; gameStrike(m, true);
+        });
+        cand.forEach((m) => { MIC.lastS[m] = now; });
         /* octave pairs (C4 + C5 together): the upper note is already ringing as the lower note's overtone, so it never "rises" when both are
            struck. Accept the upper note when it is clearly sounding at least as strongly as the lower one's fundamental. */
         MIC.lastP = MIC.lastP || new Float64Array(128);
