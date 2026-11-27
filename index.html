@@ -342,7 +342,8 @@ input[type=file] { max-width: 100%; font-size: 14px; }
       const floor = Math.max(sorted[n >> 1], 1e-9);
       for (let m = 21; m <= 108; m++) {
         const f = f0(m);
-        a[m] = dbOf(peak(f, 0.025), floor);
+        /* high piano strings are tuned progressively sharp (stretch tuning), so look a little above and wider up there */
+        a[m] = m >= 84 ? dbOf(peak(f * (1 + (m - 84) * 0.0007), 0.032), floor) : dbOf(peak(f, 0.025), floor);
         let s = -99;
         [[2, 0.03], [3, 0.035], [4, 0.04]].forEach(([h, r]) => { if (f * h < sr / 2 - 100) s = Math.max(s, dbOf(peak(f * h, r), floor)); });
         sup[m] = s;
@@ -355,9 +356,9 @@ input[type=file] { max-width: 100%; font-size: 14px; }
   }
   function isPresent(res, m, thr) {
     const a = res.a[m], s = res.sup[m];
-    if (a < thr || a < res.max - 24) return false;
+    if (a < thr || a < res.max - (m >= 84 ? 30 : 24)) return false;
     /* piano notes are narrow peaks; airflow and room noise are flat, so a peak must stand out from the pitches two steps either side */
-    if (m > 22 && m < 107 && a - Math.min(res.a[m - 2], res.a[m + 2]) < 6) return false;
+    if (m > 22 && m < 107 && a - Math.min(res.a[m - 2], res.a[m + 2]) < (m >= 84 ? 4 : 6)) return false;
     /* low rumble (wind, fans, handling noise) lives down here, so ask for a clearer note */
     if (m < 36 && a < thr + 6) return false;
     /* must also rise clearly above the room noise measured when the microphone started */
@@ -404,7 +405,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
        The lower string alone ringing in sympathy is not enough, so both must show. */
     const loPeak = a[lo] >= thr - 6 && a[lo] >= a[m] - 10 && a[lo] >= a[lo - 2] + 3 && a[lo] >= a[lo + 2] + 3;
     const has3 = m + 7 > 108 || tg.has(m + 7) || (a[m + 7] >= thr - 8 && a[m + 7] >= a[lo] - 14);
-    if (loPeak && (has3 || m > 101)) return true;
+    if (loPeak && (has3 || (m > 101 && a[lo] >= a[m] + 3))) return true;
     /* 2) the lower note's fundamental is faint but its 3rd partial is clearly there and the target's own 3rd partial is not */
     if (m + 7 <= 108 && !tg.has(m + 7) && a[m + 7] >= thr - 8 && a[m + 7] >= a[m] - 12 && (m + 19 > 108 || a[m + 7] > a[m + 19] + 2)) return true;
     return false;
@@ -416,7 +417,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
     for (const s of [12, 19, 24, 28, 31, 34, 36, 38, 40, 43]) {
       for (let d = 0; d <= 1; d++) {
         const b = c - s - d;
-        if (b >= 21 && present.has(b) && res.a[c] <= res.a[b] + 10) return true;
+        if (b >= 21 && present.has(b) && res.a[c] <= res.a[b] + (c >= 84 ? 4 : 10)) return true;
       }
     }
     return false;
@@ -674,7 +675,7 @@ input[type=file] { max-width: 100%; font-size: 14px; }
       MIC.tl = MIC.tl || new Int16Array(128); MIC.last3 = MIC.last3 || new Float64Array(128);
       MIC.tl[m] = chordPresent(res, m, thr) ? MIC.tl[m] + 1 : 0;
       if (MIC.tl[m] >= 2 && a - lo >= RISE - 2 && now - MIC.last3[m] > COOL) { strikes3.push(m); MIC.last3[m] = now; }
-      if (MIC.tc[m] >= 3 && a - lo >= RISE - 1 && now - MIC.last2[m] > COOL) { strikes2.push(m); MIC.last2[m] = now; }
+      if (MIC.tc[m] >= (m >= 84 ? 2 : 3) && a - lo >= RISE - (m >= 84 ? 2 : 1) && now - MIC.last2[m] > COOL) { strikes2.push(m); MIC.last2[m] = now; }
     }
     MIC.hp = (MIC.hp + 1) % HN;
     const muted = now < MIC.muteUntil || now - MIC.startedAt < 600;
